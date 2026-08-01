@@ -1,0 +1,24 @@
+/* Interactive controls and contrast refinements live last so they safely override the visual base layer. */
+.count-controls { display: flex; gap: 6px; align-items: center; }
+.count-button { transition: transform .2s, box-shadow .2s, opacity .2s; }
+.count-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 10px #4a91b533; }
+.count-button.subtract { background: #f4eefb; color: #7859ab; }
+.count-button:disabled { opacity: .42; cursor: not-allowed; }
+
+.dark .nav-item { color: #c9c4d1; }
+.dark .nav-item.active { background: #3d356d; color: #f2efff; }
+.dark .nav-item em { background: #46404f; color: #eee9f1; }
+.dark .round-button, .dark .progress-ring:before { background: #27232e; color: #f2eff7; border-color: #4a4552; }
+.dark .task-card.done h3 { color: #b7d2bd; }
+.dark .modal label { color: #e3dfe8; }
+.dark .modal input::placeholder { color: #aaa3b1; }
+.dark .modal .close { background: #3b3546; color: #f2eff7; }
+.dark .eyebrow, .dark .card-heading span, .dark .list-title, .dark .workspace small, .dark .profile small, .dark .mini-card small { color: #c2bbcd; }
+.dark .task-info p, .dark .streak-card p:not(.eyebrow), .dark .up-next p small, .dark .up-next time small { color: #c7c0ce; }
+.dark .up-next time, .dark .streak-card h3 span { color: #e0d9e7; }
+.dark .mini-progress, .dark .quantity-progress { background: #494251; }
+.dark .days span { background: #3d3846; color: #ddd7e5; }
+.dark .days .filled { background: #4a417c; color: #f0edff; }
+.dark .count-button { background: #274354; color: #b9ecff; }
+.dark .count-button.subtract { background: #423456; color: #eadcff; }
+.dark .tag { background: #31513a; color: #dcffe4; }
