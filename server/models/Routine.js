@@ -7,6 +7,7 @@ const routineSchema = new mongoose.Schema({
   type: { type: String, enum: ['BINARY', 'QUANTIFIABLE', 'TEMPORARY'], required: true },
   targetQuantity: { type: Number, min: 1, default: 1 },
   unit: { type: String, trim: true, default: 'times' },
+  category: { type: String, enum: ['STUDY', 'HYGIENE', 'WORKOUT', 'HEALTH', 'PERSONAL', 'OTHER'], default: 'OTHER', index: true },
   frequency: { type: String, default: 'DAILY' },
   startDate: { type: String, required: true },
   endDate: { type: String, default: null },

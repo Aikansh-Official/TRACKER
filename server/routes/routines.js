@@ -13,18 +13,18 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { title, description = '', type, targetQuantity, unit, frequency = 'DAILY', startDate, endDate } = req.body;
+    const { title, description = '', type, targetQuantity, unit, category = 'OTHER', frequency = 'DAILY', startDate, endDate } = req.body;
     const isTemporary = type === 'TEMPORARY';
     if (!title || !['BINARY', 'QUANTIFIABLE', 'TEMPORARY'].includes(type)) return res.status(400).json({ message: 'A routine title and valid type are required.' });
     if (isTemporary && !endDate) return res.status(400).json({ message: 'Temporary routines need an end date.' });
-    const routine = await Routine.create({ userId: req.user.id, title, description, type, targetQuantity: type === 'BINARY' ? 1 : Number(targetQuantity || 1), unit: unit || (type === 'BINARY' ? 'times' : 'units'), frequency, startDate: startDate || dateKey(), endDate: endDate || null, isTemporary });
+    const routine = await Routine.create({ userId: req.user.id, title, description, type, targetQuantity: type === 'BINARY' ? 1 : Number(targetQuantity || 1), unit: unit || (type === 'BINARY' ? 'times' : 'units'), category, frequency, startDate: startDate || dateKey(), endDate: endDate || null, isTemporary });
     res.status(201).json({ routine });
   } catch (error) { next(error); }
 });
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const allowed = ['title', 'description', 'targetQuantity', 'unit', 'frequency', 'startDate', 'endDate'];
+    const allowed = ['title', 'description', 'targetQuantity', 'unit', 'category', 'frequency', 'startDate', 'endDate'];
     const changes = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
     const routine = await Routine.findOneAndUpdate({ _id: req.params.id, userId: req.user.id }, changes, { new: true, runValidators: true });
     if (!routine) return res.status(404).json({ message: 'Routine not found.' });
