@@ -7,6 +7,8 @@ import routineRoutes from './routes/routines.js';
 import taskRoutes from './routes/tasks.js';
 import dashboardRoutes from './routes/dashboard.js';
 import analyticsRoutes from './routes/analytics.js';
+import moodRoutes from './routes/moods.js';
+import productivityRoutes from './routes/productivity.js';
 
 const app = express();
 const localDevelopmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
@@ -24,6 +26,8 @@ app.use('/api/routines', routineRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/moods', moodRoutes);
+app.use('/api/productivity', productivityRoutes);
 app.use((_, res) => res.status(404).json({ message: 'API route not found.' }));
 app.use((error, _, res, __) => { console.error(error); const message = error.name === 'ValidationError' ? error.message : 'Something went wrong. Please try again.'; res.status(error.status || 500).json({ message }); });
 

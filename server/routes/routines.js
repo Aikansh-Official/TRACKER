@@ -13,20 +13,21 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { title, description = '', type, targetQuantity, unit, category = 'OTHER', frequency = 'DAILY', startDate, endDate } = req.body;
+    const { title, description = '', type, targetQuantity, unit, category = 'OTHER', frequency = 'DAILY', scheduledDays = [], weeklyTarget = 3, estimatedMinutes = 25, preferredTime = null, minimumTarget = 1, stretchTarget, startDate, endDate } = req.body;
     const isTemporary = type === 'TEMPORARY';
     if (!title || !['BINARY', 'QUANTIFIABLE', 'TEMPORARY'].includes(type)) return res.status(400).json({ message: 'A routine title and valid type are required.' });
     if (isTemporary && !endDate) return res.status(400).json({ message: 'Temporary routines need an end date.' });
-    const routine = await Routine.create({ userId: req.user.id, title, description, type, targetQuantity: type === 'BINARY' ? 1 : Number(targetQuantity || 1), unit: unit || (type === 'BINARY' ? 'times' : 'units'), category, frequency, startDate: startDate || dateKey(), endDate: endDate || null, isTemporary });
+    const target = type === 'BINARY' ? 1 : Number(targetQuantity || 1);
+    const routine = await Routine.create({ userId: req.user.id, title, description, type, targetQuantity: target, unit: unit || (type === 'BINARY' ? 'times' : 'units'), category, frequency, scheduledDays: frequency === 'CUSTOM' ? [...new Set(scheduledDays.map(Number))].filter(day => day >= 0 && day <= 6) : [], weeklyTarget: Number(weeklyTarget || 3), estimatedMinutes: Number(estimatedMinutes || 25), preferredTime: preferredTime || null, minimumTarget: Math.min(Number(minimumTarget || 1), target), stretchTarget: Math.max(Number(stretchTarget || target), target), startDate: startDate || dateKey(), endDate: endDate || null, isTemporary });
     res.status(201).json({ routine });
   } catch (error) { next(error); }
 });
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const allowed = ['title', 'description', 'targetQuantity', 'unit', 'category', 'frequency', 'startDate', 'endDate'];
+    const allowed = ['title', 'description', 'targetQuantity', 'unit', 'category', 'frequency', 'scheduledDays', 'weeklyTarget', 'estimatedMinutes', 'preferredTime', 'minimumTarget', 'stretchTarget', 'startDate', 'endDate', 'pausedUntil', 'status'];
     const changes = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
-    const routine = await Routine.findOneAndUpdate({ _id: req.params.id, userId: req.user.id }, changes, { new: true, runValidators: true });
+    const routine = await Routine.findOneAndUpdate({ _id: req.params.id, userId: req.user.id }, changes, { returnDocument: 'after', runValidators: true });
     if (!routine) return res.status(404).json({ message: 'Routine not found.' });
     res.json({ routine });
   } catch (error) { next(error); }
@@ -43,7 +44,7 @@ router.patch('/:id/progress', async (req, res, next) => {
     const record = await DailyRoutineRecord.findOneAndUpdate(
       { routineId: routine._id, userId: req.user.id, date },
       { $set: { target: routine.targetQuantity, completedQuantity, completed: completedQuantity >= routine.targetQuantity } },
-      { new: true, upsert: true, runValidators: true }
+      { returnDocument: 'after', upsert: true, runValidators: true }
     );
     res.json({ record });
   } catch (error) { next(error); }
@@ -60,8 +61,19 @@ router.get('/:id/history', async (req, res, next) => {
 
 router.post('/:id/archive', async (req, res, next) => {
   try {
-    const routine = await Routine.findOneAndUpdate({ _id: req.params.id, userId: req.user.id }, { status: 'ARCHIVED' }, { new: true });
+    const routine = await Routine.findOneAndUpdate({ _id: req.params.id, userId: req.user.id }, { status: 'ARCHIVED' }, { returnDocument: 'after' });
     if (!routine) return res.status(404).json({ message: 'Routine not found.' });
+    res.json({ routine });
+  } catch (error) { next(error); }
+});
+router.post('/:id/restore', async (req, res, next) => {
+  try {
+    const routine = await Routine.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id, status: 'ARCHIVED' },
+      { status: 'ACTIVE' },
+      { returnDocument: 'after' }
+    );
+    if (!routine) return res.status(404).json({ message: 'Archived routine not found.' });
     res.json({ routine });
   } catch (error) { next(error); }
 });

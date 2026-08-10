@@ -17,7 +17,7 @@ router.get('/overview', async (req, res, next) => {
     const today = dateKey(new Date(), user?.timezone);
     const [records, tasks] = await Promise.all([
       DailyRoutineRecord.find({ userId: req.user.id }).populate('routineId').sort({ date: 1 }),
-      SpecialTask.find({ userId: req.user.id, status: { $ne: 'ARCHIVED' } }).sort({ scheduledDate: 1 })
+      SpecialTask.find({ userId: req.user.id, status: { $nin: ['ARCHIVED', 'DROPPED', 'DELEGATED'] } }).sort({ scheduledDate: 1 })
     ]);
     const validRecords = records.filter(record => record.routineId);
     const allDates = [...validRecords.map(record => record.date), ...tasks.map(task => task.status === 'COMPLETED' ? task.scheduledDate : task.originalDate)].filter(Boolean).sort();

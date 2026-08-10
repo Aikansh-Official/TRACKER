@@ -7,5 +7,7 @@ import './insights.css';
 import './pages.css';
 import './analytics-charts.css';
 import './gold-graph-theme.css';
+import './product-refresh.css';
+import './productivity.css';
 
 createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMode>);

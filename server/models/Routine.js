@@ -8,11 +8,18 @@ const routineSchema = new mongoose.Schema({
   targetQuantity: { type: Number, min: 1, default: 1 },
   unit: { type: String, trim: true, default: 'times' },
   category: { type: String, enum: ['STUDY', 'HYGIENE', 'WORKOUT', 'HEALTH', 'PERSONAL', 'OTHER'], default: 'OTHER', index: true },
-  frequency: { type: String, default: 'DAILY' },
+  frequency: { type: String, enum: ['DAILY', 'WEEKDAYS', 'WEEKENDS', 'CUSTOM', 'WEEKLY_TARGET'], default: 'DAILY' },
+  scheduledDays: [{ type: Number, min: 0, max: 6 }],
+  weeklyTarget: { type: Number, min: 1, max: 7, default: 3 },
+  estimatedMinutes: { type: Number, min: 5, max: 480, default: 25 },
+  preferredTime: { type: String, default: null },
+  minimumTarget: { type: Number, min: 1, default: 1 },
+  stretchTarget: { type: Number, min: 1, default: 1 },
+  pausedUntil: { type: String, default: null },
   startDate: { type: String, required: true },
   endDate: { type: String, default: null },
   isTemporary: { type: Boolean, default: false },
-  status: { type: String, enum: ['ACTIVE', 'EXPIRED', 'ARCHIVED'], default: 'ACTIVE', index: true }
+  status: { type: String, enum: ['ACTIVE', 'PAUSED', 'EXPIRED', 'ARCHIVED'], default: 'ACTIVE', index: true }
 }, { timestamps: true });
 
 routineSchema.index({ userId: 1, status: 1, startDate: 1 });
