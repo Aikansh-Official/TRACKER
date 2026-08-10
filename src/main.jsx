@@ -9,5 +9,6 @@ import './analytics-charts.css';
 import './gold-graph-theme.css';
 import './product-refresh.css';
 import './productivity.css';
+import './celebration.css';
 
 createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMode>);

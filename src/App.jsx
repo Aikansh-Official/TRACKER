@@ -4,6 +4,7 @@ import { api, localDateKey } from './api.js';
 
 const initialTasks = [];
 const pageNames = ['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights', 'Pending', 'Archive'];
+const isTaskComplete = task => task.done || (task.kind === 'quantity' && task.value >= task.target);
 
 function Icon({ children, className = '' }) { return <span className={`icon ${className}`}>{children}</span>; }
 function Circle({ value }) { return <div className="progress-ring" style={{ '--progress': `${value * 3.6}deg` }}><div><strong>{value}%</strong><span>complete</span></div></div>; }
@@ -26,12 +27,18 @@ export default function App() {
   const [dark, setDark] = useState(() => localStorage.getItem('tracker-theme') === 'dark');
   const [showModal, setShowModal] = useState(false);
   const [notice, setNotice] = useState('');
+  const [celebration, setCelebration] = useState(null);
   const [nav, setNav] = useState(() => { const saved = window.location.hash.slice(1); return pageNames.includes(saved) ? saved : 'Overview'; });
   const [form, setForm] = useState({ title: '', description: '', type: 'routine', target: '', unit: 'times', category: 'OTHER', endDate: '', priority: 'MEDIUM', deadline: '', frequency: 'DAILY', scheduledDays: [], weeklyTarget: 3, estimate: 25, preferredTime: '', minimumTarget: 1, stretchTarget: '' });
   const [formError, setFormError] = useState('');
 
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 2600); return () => clearTimeout(timer); }, [notice]);
+  useEffect(() => {
+    if (!celebration) return undefined;
+    const timer = setTimeout(() => setCelebration(null), celebration.kind === 'day' ? 5200 : 2400);
+    return () => clearTimeout(timer);
+  }, [celebration]);
   useEffect(() => { if (token) { loadDashboard(); loadLibrary(); loadInsights(); loadMood(); } }, [token]);
   useEffect(() => { if (token && (nav === 'Insights' || nav === 'Calendar')) loadInsights(); }, [token, nav]);
   useEffect(() => { if (token && nav === 'Mood') loadMood(); }, [token, nav]);
@@ -48,7 +55,7 @@ export default function App() {
     return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', closeOnEscape); };
   }, [showModal]);
   const percent = useMemo(() => tasks.length ? Math.round(tasks.reduce((total, task) => total + (task.kind === 'quantity' ? task.value / task.target : task.done ? 1 : 0), 0) / tasks.length * 100) : 0, [tasks]);
-  const completed = tasks.filter(t => t.done || (t.kind === 'quantity' && t.value >= t.target)).length;
+  const completed = tasks.filter(isTaskComplete).length;
   const formattedDate = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   async function loadDashboard() {
@@ -80,15 +87,21 @@ export default function App() {
   }
   const toggle = async (id) => {
     const task = tasks.find(item => item.id === id); if (!task) return;
+    const completing = !isTaskComplete(task);
+    const completesDay = completing && tasks.length > 0 && tasks.filter(item => !isTaskComplete(item)).length === 1;
     try {
       if (task.kind === 'special') await api(`/tasks/${id}/complete`, { token, method: 'PATCH', body: { completed: !task.done } });
       else await api(`/routines/${id}/progress`, { token, method: 'PATCH', body: task.kind === 'quantity' ? { completedQuantity: task.done ? 0 : task.target } : { completed: !task.done } });
-      await loadDashboard(); setNotice(`${task.title} updated`);
+      await loadDashboard();
+      if (completing) setCelebration({ id: Date.now(), kind: completesDay ? 'day' : 'task', title: task.title });
+      setNotice(`${task.title} updated`);
     } catch (error) { setNotice(error.message); }
   };
   const increase = async (id) => {
     const task = tasks.find(item => item.id === id); if (!task) return;
-    try { await api(`/routines/${id}/progress`, { token, method: 'PATCH', body: { completedQuantity: Math.min(task.target, task.value + 1) } }); await loadDashboard(); setNotice(`${task.title} progress saved`); } catch (error) { setNotice(error.message); }
+    const completing = task.value < task.target && task.value + 1 >= task.target;
+    const completesDay = completing && tasks.length > 0 && tasks.filter(item => !isTaskComplete(item)).length === 1;
+    try { await api(`/routines/${id}/progress`, { token, method: 'PATCH', body: { completedQuantity: Math.min(task.target, task.value + 1) } }); await loadDashboard(); if (completing) setCelebration({ id: Date.now(), kind: completesDay ? 'day' : 'task', title: task.title }); setNotice(`${task.title} progress saved`); } catch (error) { setNotice(error.message); }
   };
   const decrease = async (id) => {
     const task = tasks.find(item => item.id === id); if (!task || task.value <= 0) return;
@@ -156,9 +169,30 @@ export default function App() {
       </section>
     </section>
     <MobileDock active="Today" onNavigate={setNav}/>
+    {celebration && <Celebration key={celebration.id} celebration={celebration}/>}
     {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
     {modal}
   </main>;
+}
+
+function Celebration({ celebration }) {
+  const isDay = celebration.kind === 'day';
+  const pieces = useMemo(() => Array.from({ length: isDay ? 72 : 28 }, (_, index) => ({
+    id: index,
+    x: (index * 37 + 11) % 100,
+    delay: (index % 12) * 45,
+    duration: 1450 + (index % 7) * 170,
+    rotate: (index * 47) % 360,
+    color: ['gold', 'cream', 'coral', 'violet', 'mint'][index % 5]
+  })), [isDay]);
+  return <div className={`celebration ${isDay ? 'day-celebration' : 'task-celebration'}`} role="status" aria-live="polite" aria-label={isDay ? 'All tasks complete. Day complete.' : `${celebration.title} complete.`}>
+    <div className="celebration-shade"/>
+    <div className="firework firework-one"><i/><i/><i/><i/><i/><i/><i/><i/></div>
+    <div className="firework firework-two"><i/><i/><i/><i/><i/><i/><i/><i/></div>
+    {isDay && <div className="firework firework-three"><i/><i/><i/><i/><i/><i/><i/><i/></div>}
+    <div className="confetti-field" aria-hidden="true">{pieces.map(piece => <i key={piece.id} className={`confetti-piece ${piece.color}`} style={{ '--x': `${piece.x}vw`, '--delay': `${piece.delay}ms`, '--duration': `${piece.duration}ms`, '--rotate': `${piece.rotate}deg` }}/>)}</div>
+    <div className="celebration-message"><span>{isDay ? '✦ DAY COMPLETE ✦' : '✓ COMPLETE'}</span><h2>{isDay ? 'You kept every promise today.' : celebration.title}</h2><p>{isDay ? 'Pause for a second. This is what consistency feels like.' : 'One meaningful step is now part of your story.'}</p></div>
+  </div>;
 }
 
 function WorkspaceLinks({ active, onNavigate, mobileOnly = false }) {
