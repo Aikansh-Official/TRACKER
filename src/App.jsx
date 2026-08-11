@@ -147,16 +147,9 @@ export default function App() {
   if (nav === 'Pending') return overlays(<ManagePage mode="Pending" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={setNav} onMove={movePendingToToday} />);
   if (nav === 'Archive') return overlays(<ManagePage mode="Archive" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={setNav} onRestore={restoreRoutine} />);
 
-  return <main className={dark ? 'app dark' : 'app'}>
-    <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">✦</span><span>TRACKER</span></div>
-      <div className="workspace"><span className="avatar">{user?.name?.slice(0, 2).toUpperCase() || 'ME'}</span><div><b>{user?.name || 'My'}'s space</b><small>Personal</small></div><span className="chevron">⌄</span></div>
-      <nav>{['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights'].map((item, index) => <button key={item} className={nav === item ? 'nav-item active' : 'nav-item'} onClick={() => setNav(item)}><Icon>{['◫', '✦', '◷', '◌', '☺', '□', '◔'][index]}</Icon>{item}{item === 'Today' && <em>{tasks.length}</em>}</button>)}</nav>
-      <div className="nav-section"><span>MANAGE</span><button className="nav-item" onClick={() => setNav('Pending')}><Icon>⊞</Icon>Pending <em className="warm">{pendingCount}</em></button><button className="nav-item" onClick={() => setNav('Archive')}><Icon>♙</Icon>Archive</button></div>
-      <div className="sidebar-foot"><button className="mini-card" onClick={() => setNav('Insights')}><span className="tiny-orb">◉</span><div><b>{insights?.summary?.currentStreak || 0} day streak</b><small>{insights?.summary?.activeDays ? 'Calculated from saved history' : 'Your history begins today'}</small></div><span>↗</span></button><button className="profile" onClick={signOut}><span className="avatar portrait">{user?.name?.slice(0, 1).toUpperCase()}</span><span><b>{user?.name}</b><small>Sign out</small></span><Icon>•••</Icon></button></div>
-    </aside>
-    <section className="content">
-      <WorkspaceLinks active="Today" onNavigate={setNav} mobileOnly />
+  return <main className={dark ? 'app today-app dark' : 'app today-app'}>
+    <section className="content today-content">
+      <WorkspaceLinks active="Today" onNavigate={setNav}/>
       <header><div className="crumb"><span>Daily workspace</span><strong>/</strong><b>Today</b></div><div className="head-actions"><button className="mood-shortcut" onClick={() => setNav('Mood')}>How are you feeling?</button><button aria-label="Toggle theme" className="round-button" onClick={() => setDark(value => !value)}>{dark ? '☀' : '☾'}</button></div></header>
       <div className="hero"><div><p className="eyebrow">{formattedDate}</p><h1>Make today count<span>.</span></h1><p className="subtitle">Small promises, kept consistently, become your story.</p></div><div className="live-time"><span className="pulse" />{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<small>LIVE</small></div></div>
       <section className="dashboard-grid">
@@ -195,8 +188,8 @@ function Celebration({ celebration }) {
   </div>;
 }
 
-function WorkspaceLinks({ active, onNavigate, mobileOnly = false }) {
-  return <nav className={`workspace-links ${mobileOnly ? 'mobile-links' : ''}`} aria-label="Tracker pages">{['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights'].map(item => <button key={item} className={active === item ? 'selected' : ''} onClick={() => onNavigate(item)}>{item}</button>)}</nav>;
+function WorkspaceLinks({ active, onNavigate }) {
+  return <nav className="workspace-links" aria-label="Tracker pages">{['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights'].map(item => <button key={item} className={active === item ? 'selected' : ''} onClick={() => onNavigate(item)}>{item}</button>)}</nav>;
 }
 
 function MobileDock({ active, onNavigate }) {
