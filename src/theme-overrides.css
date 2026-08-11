@@ -13,6 +13,16 @@
 .dark .modal label { color: #e3dfe8; }
 .dark .modal input::placeholder { color: #aaa3b1; }
 .dark .modal .close { background: #3b3546; color: #f2eff7; }
+.modal input, .modal textarea, .modal select { color: #29262f; caret-color: #5749bd; color-scheme: light; }
+.modal input::placeholder, .modal textarea::placeholder { color: #88828e; opacity: 1; }
+.modal textarea:focus { border-color: #8a7ee0; box-shadow: 0 0 0 3px #eae8fd; }
+.dark .modal { color: #f3eff7; border: 1px solid #4a4354; color-scheme: dark; }
+.dark .modal .modal-intro { color: #c4bdca; }
+.dark .modal input, .dark .modal textarea, .dark .modal select { background: #201c27; color: #f5f1f8; caret-color: #c3b8ff; border-color: #51485c; color-scheme: dark; }
+.dark .modal input::placeholder, .dark .modal textarea::placeholder { color: #a9a1b1; opacity: 1; }
+.dark .modal input:focus, .dark .modal textarea:focus, .dark .modal select:focus { border-color: #9d91ef; box-shadow: 0 0 0 3px #554a7a; }
+.dark .modal select option { background: #201c27; color: #f5f1f8; }
+.dark .modal input:-webkit-autofill, .dark .modal input:-webkit-autofill:hover, .dark .modal input:-webkit-autofill:focus { -webkit-text-fill-color: #f5f1f8; box-shadow: 0 0 0 1000px #201c27 inset; caret-color: #c3b8ff; }
 .dark .eyebrow, .dark .card-heading span, .dark .list-title, .dark .workspace small, .dark .profile small, .dark .mini-card small { color: #c2bbcd; }
 .dark .task-info p, .dark .streak-card p:not(.eyebrow), .dark .up-next p small, .dark .up-next time small { color: #c7c0ce; }
 .dark .up-next time, .dark .streak-card h3 span { color: #e0d9e7; }
