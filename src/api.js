@@ -8,7 +8,14 @@ export async function api(path, { token, method = 'GET', body } = {}) {
     throw new Error('TRACKER cannot reach its backend. Please run npm run dev:full and keep that terminal open.');
   }
   const payload = response.status === 204 ? null : await response.json();
-  if (!response.ok) throw new Error(payload?.message || 'Could not save your changes.');
+  if (!response.ok) {
+    if (response.status === 401 && token) {
+      window.dispatchEvent(new CustomEvent('tracker:session-expired', { detail: payload?.message }));
+    }
+    const error = new Error(payload?.message || 'Could not save your changes.');
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 

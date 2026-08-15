@@ -1,0 +1,5 @@
+.task-card.skipped { opacity: .7; border-style: dashed; }
+.task-card.skipped .check { pointer-events: none; }
+.estimate-truth { margin-bottom: 14px; }
+.estimate-truth h2 { margin: 7px 0; font: 700 23px Fraunces, serif; }
+.estimate-truth > p:not(.eyebrow) { color: var(--muted); font-size: 12px; line-height: 1.55; }

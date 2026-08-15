@@ -32,3 +32,20 @@
 .dark .count-button { background: #274354; color: #b9ecff; }
 .dark .count-button.subtract { background: #423456; color: #eadcff; }
 .dark .tag { background: #31513a; color: #dcffe4; }
+
+/* The authentication card is always light, regardless of the saved workspace theme. */
+.auth-page, .auth-card { color-scheme: light; }
+.auth-card input {
+  background: #fbfafd;
+  color: #29262f;
+  caret-color: #5749bd;
+  -webkit-text-fill-color: #29262f;
+}
+.auth-card input::placeholder { color: #77717f; opacity: 1; }
+.auth-card input:-webkit-autofill,
+.auth-card input:-webkit-autofill:hover,
+.auth-card input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #29262f;
+  box-shadow: 0 0 0 1000px #fbfafd inset;
+  caret-color: #5749bd;
+}

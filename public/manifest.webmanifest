@@ -1,0 +1,10 @@
+{
+  "name": "TRACKER Personal Productivity",
+  "short_name": "TRACKER",
+  "description": "A private workspace for tasks, routines, focus, mood, and honest progress.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17151d",
+  "theme_color": "#d7a940",
+  "categories": ["productivity", "lifestyle"]
+}

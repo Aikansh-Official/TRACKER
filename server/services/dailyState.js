@@ -9,7 +9,8 @@ const startOfWeek = date => { const value = new Date(`${date}T00:00:00.000Z`); c
 export async function prepareDailyState(user) {
   const today = dateKey(new Date(), user.timezone);
   // A missed browser session cannot lose tasks: this runs on every protected dashboard request.
-  await SpecialTask.updateMany({ userId: user._id, status: 'TODAY', scheduledDate: { $lt: today } }, { $set: { status: 'PENDING' } });
+  await SpecialTask.updateMany({ userId: user._id, status: { $in: ['TODAY', 'SCHEDULED'] }, scheduledDate: { $lt: today } }, { $set: { status: 'PENDING' } });
+  await SpecialTask.updateMany({ userId: user._id, status: 'SCHEDULED', scheduledDate: today }, { $set: { status: 'TODAY' } });
   await Routine.updateMany({ userId: user._id, status: 'ACTIVE', isTemporary: true, endDate: { $lt: today } }, { $set: { status: 'EXPIRED' } });
   const candidates = await Routine.find({ userId: user._id, status: 'ACTIVE', startDate: { $lte: today }, $and: [{ $or: [{ pausedUntil: null }, { pausedUntil: { $lt: today } }] }, { $or: [{ isTemporary: false }, { endDate: { $gte: today } }] }] }).sort({ createdAt: 1 });
   const weekStart = startOfWeek(today);

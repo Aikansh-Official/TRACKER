@@ -23,12 +23,12 @@ async function weeklySnapshot(userId, weekStart) {
   const weekEnd = addDays(weekStart, 6);
   const [records, tasks, focus, moods] = await Promise.all([
     DailyRoutineRecord.find({ userId, date: { $gte: weekStart, $lte: weekEnd } }).lean(),
-    SpecialTask.find({ userId, originalDate: { $gte: weekStart, $lte: weekEnd } }).lean(),
+    SpecialTask.find({ userId, scheduledDate: { $gte: weekStart, $lte: weekEnd } }).lean(),
     FocusSession.find({ userId, status: 'COMPLETED', startedAt: { $gte: new Date(`${weekStart}T00:00:00.000Z`), $lt: new Date(`${addDays(weekEnd, 1)}T00:00:00.000Z`) } }).lean(),
     MoodEntry.find({ userId, date: { $gte: weekStart, $lte: weekEnd } }).lean()
   ]);
   const achieved = records.reduce((sum, record) => sum + Math.min(record.completedQuantity / record.target, 1), 0) + tasks.filter(task => task.status === 'COMPLETED').length;
-  const planned = records.length + tasks.filter(task => !['DROPPED', 'DELEGATED'].includes(task.status)).length;
+  const planned = records.filter(record => !record.skipped).length + tasks.filter(task => !['SKIPPED', 'DROPPED', 'DELEGATED'].includes(task.status)).length;
   const focusMinutes = focus.reduce((sum, session) => sum + session.durationMinutes, 0);
   const moodAverage = moods.length ? Math.round(moods.reduce((sum, mood) => sum + mood.mood, 0) / moods.length * 10) / 10 : null;
   return {
@@ -64,29 +64,35 @@ router.get('/overview', async (req, res, next) => {
     const taskItems = state.specialTasks.map(task => ({ id: String(task._id), type: 'TASK', title: task.title, estimate: task.estimatedMinutes || 30, preferredTime: task.preferredTime || task.deadline, done: task.status === 'COMPLETED' }));
     const items = [...routineItems, ...taskItems];
     const validPriorityIds = new Set(items.map(item => `${item.type}:${item.id}`));
-    const resolvedPlan = plan || { date: today, intention: '', capacity: 'NORMAL', priorityIds: [], shutdownNote: '' };
+    const resolvedPlan = plan || { date: today, intention: '', implementationIntention: '', capacity: 'NORMAL', priorityIds: [], shutdownNote: '' };
     const cleanedPriorityIds = (resolvedPlan.priorityIds || []).filter(id => validPriorityIds.has(id));
     if (plan && cleanedPriorityIds.length !== (plan.priorityIds || []).length) {
       await DailyPlan.updateOne({ _id: plan._id }, { $set: { priorityIds: cleanedPriorityIds } });
       resolvedPlan.priorityIds = cleanedPriorityIds;
     }
     const workloadMinutes = items.filter(item => !item.done).reduce((sum, item) => sum + item.estimate, 0);
+    const capacityMinutes = resolvedPlan.capacity === 'LOW' ? 180 : resolvedPlan.capacity === 'HIGH' ? 480 : 360;
     const todayFocus = focusSessions.filter(session => dateKey(session.startedAt, user.timezone) === today && session.status === 'COMPLETED');
     const activeFocus = focusSessions.find(session => session.status === 'ACTIVE') || null;
     const suggestions = [];
     if (!resolvedPlan.priorityIds.length) suggestions.push({ id: 'priorities', tone: 'gold', title: 'Choose the day before it chooses you.', evidence: `${items.filter(item => !item.done).length} open item${items.filter(item => !item.done).length === 1 ? '' : 's'} need an order.`, action: 'Select up to three must-win priorities.' });
-    if (workloadMinutes > 360) suggestions.push({ id: 'overload', tone: 'warm', title: 'The plan is carrying too much.', evidence: `${Math.round(workloadMinutes / 60 * 10) / 10} estimated hours remain.`, action: 'Drop, delegate, or reschedule a low-value task.' });
+    if (workloadMinutes > capacityMinutes) suggestions.push({ id: 'overload', tone: 'warm', title: 'The plan is carrying too much.', evidence: `${Math.round(workloadMinutes / 60 * 10) / 10} estimated hours exceed today’s ${resolvedPlan.capacity.toLowerCase()} capacity.`, action: 'Drop, delegate, or reschedule a low-value task.' });
     if (mood?.sleepHours < 6) suggestions.push({ id: 'sleep', tone: 'calm', title: 'Protect energy before ambition.', evidence: `Last night’s sleep was ${mood.sleepHours} hours.`, action: 'Use shorter focus sessions and keep one essential priority.' });
     if (!todayFocus.length) suggestions.push({ id: 'focus', tone: 'violet', title: 'Attention has not been protected yet.', evidence: 'No completed focus session is saved today.', action: 'Begin with a 25-minute session.' });
     const routineStats = new Map();
-    recentRecords.forEach(record => { if (!record.routineId) return; const id = String(record.routineId._id); const value = routineStats.get(id) || { title: record.routineId.title, planned: 0, achieved: 0 }; value.planned += 1; value.achieved += Math.min(record.completedQuantity / record.target, 1); routineStats.set(id, value); });
+    recentRecords.forEach(record => { if (!record.routineId || record.skipped) return; const id = String(record.routineId._id); const value = routineStats.get(id) || { title: record.routineId.title, planned: 0, achieved: 0 }; value.planned += 1; value.achieved += Math.min(record.completedQuantity / record.target, 1); routineStats.set(id, value); });
     const atRisk = [...routineStats.values()].filter(value => value.planned >= 3).map(value => ({ ...value, score: Math.round(value.achieved / value.planned * 100) })).sort((a, b) => a.score - b.score)[0];
     if (atRisk?.score < 40) suggestions.push({ id: 'routine', tone: 'slate', title: 'One routine may need redesigning.', evidence: `${atRisk.title} is at ${atRisk.score}% across ${atRisk.planned} recorded days.`, action: 'Reduce its frequency, target, or friction.' });
+    const comparableFocus = focusSessions.filter(session => session.status === 'COMPLETED' && session.taskId && session.plannedMinutes > 0);
+    const estimatedMinutes = comparableFocus.reduce((sum, session) => sum + session.plannedMinutes, 0);
+    const actualMinutes = comparableFocus.reduce((sum, session) => sum + session.durationMinutes, 0);
     res.json({
       today,
       plan: resolvedPlan,
       items,
       workloadMinutes,
+      capacityMinutes,
+      estimateAccuracy: { sessions: comparableFocus.length, plannedMinutes: estimatedMinutes, actualMinutes, ratio: estimatedMinutes ? Math.round(actualMinutes / estimatedMinutes * 100) : null },
       focus: { active: activeFocus, todayMinutes: todayFocus.reduce((sum, session) => sum + session.durationMinutes, 0), todaySessions: todayFocus.length, recent: focusSessions.filter(session => session.status !== 'ACTIVE').slice(0, 7) },
       goals: goals.map(goalView),
       routines: routineSettings,
@@ -104,7 +110,7 @@ router.put('/plan/:date', async (req, res, next) => {
     const priorityIds = [...new Set(Array.isArray(req.body.priorityIds) ? req.body.priorityIds.map(String) : [])].slice(0, 3);
     const plan = await DailyPlan.findOneAndUpdate(
       { userId: req.user.id, date },
-      { $set: { intention: String(req.body.intention || '').slice(0, 300), capacity: ['LOW', 'NORMAL', 'HIGH'].includes(req.body.capacity) ? req.body.capacity : 'NORMAL', priorityIds, shutdownNote: String(req.body.shutdownNote || '').slice(0, 600) } },
+      { $set: { intention: String(req.body.intention || '').slice(0, 300), implementationIntention: String(req.body.implementationIntention || '').slice(0, 400), capacity: ['LOW', 'NORMAL', 'HIGH'].includes(req.body.capacity) ? req.body.capacity : 'NORMAL', priorityIds, shutdownNote: String(req.body.shutdownNote || '').slice(0, 600) } },
       { upsert: true, returnDocument: 'after', runValidators: true }
     );
     res.json({ plan });
@@ -215,6 +221,28 @@ router.get('/export', async (req, res, next) => {
       WeeklyReview.find({ userId: req.user.id }).lean()
     ]);
     res.json({ exportedAt: new Date().toISOString(), user, plans, routines, records, tasks, moods, focusSessions, goals, weeklyReviews });
+  } catch (error) { next(error); }
+});
+
+router.get('/calendar.ics', async (req, res, next) => {
+  try {
+    const tasks = await SpecialTask.find({ userId: req.user.id, status: { $nin: ['ARCHIVED', 'SKIPPED', 'DROPPED', 'DELEGATED'] } }).sort({ scheduledDate: 1 }).lean();
+    const escape = value => String(value || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const compactDate = value => value.replace(/-/g, '');
+    const events = tasks.map(task => {
+      const lines = ['BEGIN:VEVENT', `UID:${task._id}@tracker.local`, `DTSTAMP:${stamp}`, `SUMMARY:${escape(task.title)}`, `DESCRIPTION:${escape(task.description)}`];
+      if (task.allDay || (!task.startTime && !task.deadline)) {
+        lines.push(`DTSTART;VALUE=DATE:${compactDate(task.scheduledDate)}`, `DTEND;VALUE=DATE:${compactDate(addDays(task.scheduledDate, 1))}`);
+      } else {
+        const start = task.startTime || task.deadline || '09:00'; const endMinutes = Number(task.estimatedMinutes || 30); const startValue = new Date(`${task.scheduledDate}T${start}:00`); const endValue = task.deadline && task.itemType === 'EVENT' ? new Date(`${task.scheduledDate}T${task.deadline}:00`) : new Date(startValue.getTime() + endMinutes * 60000);
+        const localStamp = value => `${compactDate(task.scheduledDate)}T${String(value.getHours()).padStart(2, '0')}${String(value.getMinutes()).padStart(2, '0')}00`;
+        lines.push(`DTSTART:${localStamp(startValue)}`, `DTEND:${localStamp(endValue)}`);
+      }
+      lines.push('END:VEVENT'); return lines.join('\r\n');
+    });
+    const calendar = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//TRACKER//Personal Productivity//EN', 'CALSCALE:GREGORIAN', ...events, 'END:VCALENDAR'].join('\r\n');
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="tracker-calendar-${dateKey()}.ics"`); res.send(calendar);
   } catch (error) { next(error); }
 });
 

@@ -6,7 +6,9 @@ const dailyRoutineRecordSchema = new mongoose.Schema({
   date: { type: String, required: true, index: true },
   target: { type: Number, required: true, min: 1 },
   completedQuantity: { type: Number, default: 0, min: 0 },
-  completed: { type: Boolean, default: false }
+  completed: { type: Boolean, default: false },
+  skipped: { type: Boolean, default: false },
+  skipReason: { type: String, trim: true, maxlength: 180, default: '' }
 }, { timestamps: true });
 
 dailyRoutineRecordSchema.index({ routineId: 1, date: 1 }, { unique: true });

@@ -43,7 +43,7 @@ router.patch('/:id/progress', async (req, res, next) => {
     const completedQuantity = Math.min(quantity, routine.targetQuantity);
     const record = await DailyRoutineRecord.findOneAndUpdate(
       { routineId: routine._id, userId: req.user.id, date },
-      { $set: { target: routine.targetQuantity, completedQuantity, completed: completedQuantity >= routine.targetQuantity } },
+      { $set: { target: routine.targetQuantity, completedQuantity, completed: completedQuantity >= routine.targetQuantity, skipped: false, skipReason: '' } },
       { returnDocument: 'after', upsert: true, runValidators: true }
     );
     res.json({ record });
@@ -56,6 +56,21 @@ router.get('/:id/history', async (req, res, next) => {
     if (!routine) return res.status(404).json({ message: 'Routine not found.' });
     const records = await DailyRoutineRecord.find({ routineId: routine._id, userId: req.user.id }).sort({ date: -1 }).limit(120);
     res.json({ routine, records });
+  } catch (error) { next(error); }
+});
+
+router.patch('/:id/skip', async (req, res, next) => {
+  try {
+    const routine = await Routine.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!routine) return res.status(404).json({ message: 'Routine not found.' });
+    const date = req.body.date || dateKey();
+    const skipped = req.body.skipped !== false;
+    const record = await DailyRoutineRecord.findOneAndUpdate(
+      { routineId: routine._id, userId: req.user.id, date },
+      { $set: { target: routine.targetQuantity, completedQuantity: 0, completed: false, skipped, skipReason: skipped ? String(req.body.reason || 'Intentional rest').slice(0, 180) : '' } },
+      { returnDocument: 'after', upsert: true, runValidators: true }
+    );
+    res.json({ record });
   } catch (error) { next(error); }
 });
 

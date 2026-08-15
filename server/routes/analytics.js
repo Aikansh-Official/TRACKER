@@ -17,10 +17,10 @@ router.get('/overview', async (req, res, next) => {
     const today = dateKey(new Date(), user?.timezone);
     const [records, tasks] = await Promise.all([
       DailyRoutineRecord.find({ userId: req.user.id }).populate('routineId').sort({ date: 1 }),
-      SpecialTask.find({ userId: req.user.id, status: { $nin: ['ARCHIVED', 'DROPPED', 'DELEGATED'] } }).sort({ scheduledDate: 1 })
+      SpecialTask.find({ userId: req.user.id, scheduledDate: { $lte: today }, status: { $nin: ['ARCHIVED', 'SKIPPED', 'DROPPED', 'DELEGATED', 'SCHEDULED'] } }).sort({ scheduledDate: 1 })
     ]);
-    const validRecords = records.filter(record => record.routineId);
-    const allDates = [...validRecords.map(record => record.date), ...tasks.map(task => task.status === 'COMPLETED' ? task.scheduledDate : task.originalDate)].filter(Boolean).sort();
+    const validRecords = records.filter(record => record.routineId && !record.skipped);
+    const allDates = [...validRecords.map(record => record.date), ...tasks.map(task => task.scheduledDate)].filter(Boolean).sort();
     if (!allDates.length) return res.json({ empty: true, summary: { currentStreak: 0, bestStreak: 0, activeDays: 0, average: 0 }, daily: [], categories: [], routines: [], heatmap: [] });
 
     const start = allDates[0]; const dates = daysBetween(start, today);
@@ -35,7 +35,7 @@ router.get('/overview', async (req, res, next) => {
       const routineId = String(record.routineId._id); const routineValue = routineTotals.get(routineId) || { id: routineId, title: record.routineId.title, category, achieved: 0, planned: 0, days: 0 };
       routineValue.achieved += Math.min(record.completedQuantity / record.target, 1); routineValue.planned += 1; routineValue.days += 1; routineTotals.set(routineId, routineValue);
     }
-    for (const task of tasks) { const date = task.status === 'COMPLETED' ? task.scheduledDate : task.originalDate; const day = byDate.get(date) || { date, achieved: 0, planned: 0, routines: 0, tasks: 0 }; day.planned += 1; day.achieved += task.status === 'COMPLETED' ? 1 : 0; day.tasks += 1; byDate.set(date, day); }
+    for (const task of tasks) { const date = task.scheduledDate; const day = byDate.get(date) || { date, achieved: 0, planned: 0, routines: 0, tasks: 0 }; day.planned += 1; day.achieved += task.status === 'COMPLETED' ? 1 : 0; day.tasks += 1; byDate.set(date, day); }
     const daily = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).map(day => ({ ...day, score: day.planned ? Math.round(day.achieved / day.planned * 100) : 0 }));
     const finishedDays = daily.filter(day => day.planned > 0); const average = finishedDays.length ? Math.round(finishedDays.reduce((sum, day) => sum + day.score, 0) / finishedDays.length) : 0;
     const monthlyMap = new Map(); for (const day of daily) { if (!day.planned) continue; const month = day.date.slice(0, 7); const value = monthlyMap.get(month) || { month, achieved: 0, planned: 0, days: 0 }; value.achieved += day.achieved; value.planned += day.planned; value.days += 1; monthlyMap.set(month, value); }
