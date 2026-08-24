@@ -10,6 +10,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import analyticsRoutes from './routes/analytics.js';
 import moodRoutes from './routes/moods.js';
 import productivityRoutes from './routes/productivity.js';
+import syncRoutes from './routes/sync.js';
 
 const app = express();
 const localDevelopmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
@@ -36,6 +37,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/moods', moodRoutes);
 app.use('/api/productivity', productivityRoutes);
+app.use('/api/sync', syncRoutes);
 app.use((_, res) => res.status(404).json({ message: 'API route not found.' }));
 app.use((error, _, res, __) => {
   console.error(error);

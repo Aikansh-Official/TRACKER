@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { randomUUID } from 'node:crypto';
 
 const specialTaskSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -33,9 +34,14 @@ const specialTaskSchema = new mongoose.Schema({
   skipReason: { type: String, trim: true, maxlength: 180, default: '' },
   delegatedTo: { type: String, trim: true, maxlength: 120, default: '' },
   completedAt: { type: Date, default: null },
-  resolvedAt: { type: Date, default: null }
+  resolvedAt: { type: Date, default: null },
+  syncId: { type: String, required: true, default: randomUUID, immutable: true },
+  revision: { type: Number, required: true, default: 1, min: 1 },
+  syncUpdatedAt: { type: Date, required: true, default: Date.now },
+  deletedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 specialTaskSchema.index({ userId: 1, status: 1, scheduledDate: 1 });
 specialTaskSchema.index({ userId: 1, seriesId: 1, occurrenceDate: 1 }, { sparse: true });
+specialTaskSchema.index({ userId: 1, syncId: 1 }, { unique: true });
 export default mongoose.model('SpecialTask', specialTaskSchema);

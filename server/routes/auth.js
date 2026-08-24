@@ -3,9 +3,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
+import { jwtSecret } from '../config/security.js';
 
 const router = Router();
-const tokenFor = user => jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET || 'development-secret-change-me', { expiresIn: '7d' });
+const tokenFor = user => jwt.sign({ id: user._id, email: user.email }, jwtSecret, { expiresIn: '7d' });
 const publicUser = user => ({ id: user._id, name: user.name, email: user.email, timezone: user.timezone });
 
 router.post('/register', async (req, res, next) => {
