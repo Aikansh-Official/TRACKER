@@ -1,4 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  CalendarBlank,
+  ChartLineUp,
+  CheckCircle,
+  House,
+  Moon,
+  Repeat,
+  Smiley,
+  Sun,
+  Target,
+} from '@phosphor-icons/react';
 import ProductivityStudio from './ProductivityStudio.jsx';
 import { QuickCapture, ReminderCenter, WeekPlanner } from './PlannerEnhancements.jsx';
 import { api, localDateKey } from './api.js';
@@ -6,9 +17,19 @@ import { api, localDateKey } from './api.js';
 const initialTasks = [];
 const pageNames = ['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights', 'Pending', 'Archive'];
 const isTaskComplete = task => task.done || (task.kind === 'quantity' && task.value >= task.target);
+const workspaceNavigation = [
+  ['Overview', House],
+  ['Plan', Target],
+  ['Today', CheckCircle],
+  ['Routines', Repeat],
+  ['Mood', Smiley],
+  ['Calendar', CalendarBlank],
+  ['Insights', ChartLineUp],
+];
 
 function Icon({ children, className = '' }) { return <span className={`icon ${className}`}>{children}</span>; }
 function Circle({ value }) { return <div className="progress-ring" style={{ '--progress': `${value * 3.6}deg` }}><div><strong>{value}%</strong><span>complete</span></div></div>; }
+function ThemeGlyph({ dark }) { return dark ? <Sun aria-hidden="true" size={19} weight="bold"/> : <Moon aria-hidden="true" size={19} weight="bold"/>; }
 
 export default function App() {
   const [tasks, setTasks] = useState(initialTasks);
@@ -53,6 +74,7 @@ export default function App() {
     localStorage.setItem('tracker-theme', dark ? 'dark' : 'light');
     // Authentication is intentionally a light surface even when the signed-in workspace remembers dark mode.
     document.documentElement.style.colorScheme = token && dark ? 'dark' : 'light';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', token && dark ? '#171816' : '#efeee9');
   }, [dark, token]);
   useEffect(() => {
     const expireSession = event => {
@@ -85,7 +107,7 @@ export default function App() {
     try {
       const dashboard = await api('/dashboard', { token });
       const routineTasks = dashboard.records.map(record => ({ id: record.routineId._id, title: record.routineId.title, note: record.skipped ? `Rest day · ${record.skipReason || 'intentionally skipped'}` : record.routineId.type === 'QUANTIFIABLE' ? `${record.completedQuantity} of ${record.target} ${record.routineId.unit}` : record.routineId.isTemporary ? `Until ${record.routineId.endDate}` : 'Daily routine', kind: record.routineId.type === 'QUANTIFIABLE' ? 'quantity' : record.routineId.isTemporary ? 'temporary' : 'routine', value: record.completedQuantity, target: record.target, done: record.completed, skipped: record.skipped, icon: record.skipped ? '☕' : record.routineId.type === 'QUANTIFIABLE' ? '◉' : record.routineId.isTemporary ? '⌁' : '◒', color: record.routineId.type === 'QUANTIFIABLE' ? 'blue' : record.routineId.isTemporary ? 'mint' : 'violet' }));
-      const specialTasks = dashboard.specialTasks.map(task => ({ id: task._id, title: task.title, note: task.allDay ? `All-day ${task.itemType === 'EVENT' ? 'event' : 'task'}` : task.itemType === 'EVENT' && task.startTime ? `${task.startTime}${task.deadline ? `–${task.deadline}` : ''} · event` : task.deadline ? `Due · ${task.deadline}` : `${task.priority.toLowerCase()} priority`, kind: 'special', done: task.status === 'COMPLETED', icon: task.itemType === 'EVENT' ? '◆' : '✦', color: 'coral' }));
+      const specialTasks = dashboard.specialTasks.map(task => ({ id: task._id, title: task.title, note: task.allDay ? `All-day ${task.itemType === 'EVENT' ? 'event' : 'task'}` : task.itemType === 'EVENT' && task.startTime ? `${task.startTime}${task.deadline ? `-${task.deadline}` : ''} · event` : task.deadline ? `Due · ${task.deadline}` : `${task.priority.toLowerCase()} priority`, kind: 'special', done: task.status === 'COMPLETED', icon: task.itemType === 'EVENT' ? '◆' : '✦', color: 'coral' }));
       setTasks([...routineTasks, ...specialTasks]); setPendingCount(dashboard.pendingCount); setUser(dashboard.user); localStorage.setItem('tracker-user', JSON.stringify(dashboard.user));
     } catch (error) { setNotice(error.message); } finally { setLoading(false); }
   }
@@ -174,7 +196,7 @@ export default function App() {
   return <main className={dark ? 'app today-app dark' : 'app today-app'}>
     <section className="content today-content">
       <WorkspaceLinks active="Today" onNavigate={setNav}/>
-      <header><div className="crumb"><span>Daily workspace</span><strong>/</strong><b>Today</b></div><div className="head-actions"><button className="mood-shortcut" onClick={() => setNav('Mood')}>How are you feeling?</button><button aria-label="Toggle theme" className="round-button" onClick={() => setDark(value => !value)}>{dark ? '☀' : '☾'}</button></div></header>
+      <header><div className="crumb"><span>Daily workspace</span><strong>/</strong><b>Today</b></div><div className="head-actions"><button className="mood-shortcut" onClick={() => setNav('Mood')}>How are you feeling?</button><button aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} className="round-button" onClick={() => setDark(value => !value)}><ThemeGlyph dark={dark}/></button></div></header>
       <div className="hero"><div><p className="eyebrow">{formattedDate}</p><h1>Make today count<span>.</span></h1><p className="subtitle">Small promises, kept consistently, become your story.</p></div><div className="live-time"><span className="pulse" />{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<small>LIVE</small></div></div>
       <section className="dashboard-grid">
         <article className="score-card"><div className="card-heading"><span>DAILY SCORE</span><span className="live-source">LIVE DATA</span></div><div className="score-content"><Circle value={percent}/><div className="score-copy"><p>{scoredTasks.length ? 'Today’s progress is saved.' : 'Add your first routine to begin.'}</p><b>{completed} of {scoredTasks.length} complete</b><div className="mini-progress"><i style={{ width: `${percent}%` }}/></div><small>Intentional recovery days are excluded.</small></div></div></article>
@@ -215,17 +237,17 @@ function Celebration({ celebration }) {
 }
 
 function WorkspaceLinks({ active, onNavigate }) {
-  return <nav className="workspace-links" aria-label="Tracker pages">{['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights'].map(item => <button key={item} className={active === item ? 'selected' : ''} onClick={() => onNavigate(item)}>{item}</button>)}</nav>;
+  return <nav className="workspace-links" aria-label="Tracker pages">{workspaceNavigation.map(([item, NavigationIcon]) => <button key={item} className={active === item ? 'selected' : ''} aria-current={active === item ? 'page' : undefined} onClick={() => onNavigate(item)}><NavigationIcon aria-hidden="true" size={17} weight="bold"/><span>{item}</span></button>)}</nav>;
 }
 
 function MobileDock({ active, onNavigate }) {
-  return <nav className="mobile-dock" aria-label="Mobile tracker pages">{[['Overview','⌂'],['Plan','✦'],['Today','✓'],['Routines','◌'],['Mood','☺'],['Calendar','□'],['Insights','↗']].map(([item, icon]) => <button key={item} className={active === item ? 'selected' : ''} onClick={() => onNavigate(item)}><span>{icon}</span>{item}</button>)}</nav>;
+  return <nav className="mobile-dock" aria-label="Mobile tracker pages">{workspaceNavigation.map(([item, NavigationIcon]) => <button key={item} className={active === item ? 'selected' : ''} aria-current={active === item ? 'page' : undefined} onClick={() => onNavigate(item)}><NavigationIcon aria-hidden="true" size={20} weight="bold"/><span>{item}</span></button>)}</nav>;
 }
 
 function OverviewPage({ tasks, percent, pendingCount, archivedCount, moodData, dark, onNavigate, onTheme, onSignOut }) {
   const routines = tasks.filter(task => task.kind !== 'special'); const special = tasks.filter(task => task.kind === 'special');
   const todayMood = moodData?.entries?.find(item => item.date === localDateKey());
-  return <main className={dark ? 'workspace-page dark' : 'workspace-page'}><WorkspaceLinks active="Overview" onNavigate={onNavigate}/><div className="page-utilities"><button aria-label="Toggle theme" className="round-button" onClick={onTheme}>{dark ? '☀' : '☾'}</button><button className="quiet-button" onClick={onSignOut}>Sign out</button></div><header className="workspace-heading overview-hero"><div><p className="eyebrow">TRACKER OVERVIEW · LIVE FROM MONGODB</p><h1>Your day, without the noise<span>.</span></h1><p>Priorities, wellbeing, and progress in one honest workspace.</p></div><button className="add-button" onClick={() => onNavigate('Today')}>Open today →</button></header><section className="overview-metrics"><article><span>DAILY SCORE</span><strong>{percent}%</strong><small>{tasks.length} planned item{tasks.length === 1 ? '' : 's'} today</small></article><article><span>ROUTINES</span><strong>{routines.filter(task => task.done).length} / {routines.length}</strong><small>completed routine records</small></article><article><span>MOOD</span><strong>{todayMood ? `${todayMood.mood}/5` : '—'}</strong><small>{todayMood ? 'today’s saved check-in' : 'check in when you are ready'}</small></article><article><span>PENDING</span><strong>{pendingCount}</strong><small>tasks waiting to be rescheduled</small></article></section><section className="overview-actions"><button onClick={() => onNavigate('Today')}><b>Today</b><span>Check off, add, or update today’s intentions →</span></button><button onClick={() => onNavigate('Mood')}><b>Mood studio</b><span>Track energy, stress, focus, sleep, and emotions →</span></button><button onClick={() => onNavigate('Routines')}><b>Routines</b><span>Review the habits shaping your day →</span></button><button onClick={() => onNavigate('Calendar')}><b>Calendar</b><span>Inspect real completion scores by date →</span></button><button onClick={() => onNavigate('Insights')}><b>Insights</b><span>Explore consistency since day one →</span></button><button onClick={() => onNavigate('Pending')}><b>Pending</b><span>Reschedule work that slipped through the day →</span></button><button onClick={() => onNavigate('Archive')}><b>Archive</b><span>{archivedCount ? `${archivedCount} saved routine${archivedCount === 1 ? '' : 's'} · restore whenever you need →` : 'Keep retired routines without losing their history →'}</span></button></section></main>;
+  return <main className={dark ? 'workspace-page dark' : 'workspace-page'}><WorkspaceLinks active="Overview" onNavigate={onNavigate}/><div className="page-utilities"><button aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} className="round-button" onClick={onTheme}><ThemeGlyph dark={dark}/></button><button className="quiet-button" onClick={onSignOut}>Sign out</button></div><header className="workspace-heading overview-hero"><div><p className="eyebrow">TRACKER OVERVIEW · LIVE FROM MONGODB</p><h1>Your day, without the noise<span>.</span></h1><p>Priorities, wellbeing, and progress in one honest workspace.</p></div><button className="add-button" onClick={() => onNavigate('Today')}>Open today →</button></header><section className="overview-metrics"><article><span>DAILY SCORE</span><strong>{percent}%</strong><small>{tasks.length} planned item{tasks.length === 1 ? '' : 's'} today</small></article><article><span>ROUTINES</span><strong>{routines.filter(task => task.done).length} / {routines.length}</strong><small>completed routine records</small></article><article><span>MOOD</span><strong>{todayMood ? `${todayMood.mood}/5` : '-'}</strong><small>{todayMood ? 'today’s saved check-in' : 'check in when you are ready'}</small></article><article><span>PENDING</span><strong>{pendingCount}</strong><small>tasks waiting to be rescheduled</small></article></section><section className="overview-actions"><button onClick={() => onNavigate('Today')}><b>Today</b><span>Check off, add, or update today’s intentions →</span></button><button onClick={() => onNavigate('Mood')}><b>Mood studio</b><span>Track energy, stress, focus, sleep, and emotions →</span></button><button onClick={() => onNavigate('Routines')}><b>Routines</b><span>Review the habits shaping your day →</span></button><button onClick={() => onNavigate('Calendar')}><b>Calendar</b><span>Inspect real completion scores by date →</span></button><button onClick={() => onNavigate('Insights')}><b>Insights</b><span>Explore consistency since day one →</span></button><button onClick={() => onNavigate('Pending')}><b>Pending</b><span>Reschedule work that slipped through the day →</span></button><button onClick={() => onNavigate('Archive')}><b>Archive</b><span>{archivedCount ? `${archivedCount} saved routine${archivedCount === 1 ? '' : 's'} · restore whenever you need →` : 'Keep retired routines without losing their history →'}</span></button></section></main>;
 }
 
 function RoutinesPage({ tasks, dark, onNavigate, onAdd, onArchive }) {
@@ -321,7 +343,7 @@ function InsightsPage({ data, loading, error, dark, onBack, onTheme, onNavigate 
   const area = points.length ? `${line} L ${points.at(-1).x} ${chartHeight - inset} L ${points[0].x} ${chartHeight - inset} Z` : '';
   const labelDate = value => new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return <main className={dark ? 'insights-page analytics-gold dark' : 'insights-page analytics-gold'}>
-    <WorkspaceLinks active="Insights" onNavigate={onNavigate}/><header className="insights-header"><button className="back-button" onClick={onBack}>← Today</button><div><p className="eyebrow">TRACKER ANALYTICS · SAVED HISTORY ONLY</p><h1>Consistency, clearly seen<span>.</span></h1></div><button className="round-button" aria-label="Toggle theme" onClick={onTheme}>{dark ? '☀' : '☾'}</button></header>
+    <WorkspaceLinks active="Insights" onNavigate={onNavigate}/><header className="insights-header"><button className="back-button" onClick={onBack}>← Today</button><div><p className="eyebrow">TRACKER ANALYTICS · SAVED HISTORY ONLY</p><h1>Consistency, clearly seen<span>.</span></h1></div><button className="round-button" aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} onClick={onTheme}><ThemeGlyph dark={dark}/></button></header>
     {loading && <p className="insight-loading">Loading the records saved in MongoDB…</p>}
     {!loading && error && <section className="analytics-empty"><span>!</span><p className="eyebrow">ANALYTICS UNAVAILABLE</p><h2>The saved-history service could not be reached.</h2><p>{error}</p><button className="add-button" onClick={onBack}>Back to Today</button></section>}
     {!loading && !error && data?.empty && <section className="analytics-empty"><span>◌</span><p className="eyebrow">NO HISTORY YET</p><h2>Your first chart starts with your first completed routine.</h2><p>TRACKER will calculate this page from daily records only—never from sample data.</p><button className="add-button" onClick={onBack}>Add a routine</button></section>}
