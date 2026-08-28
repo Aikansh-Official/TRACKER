@@ -12,7 +12,7 @@ TRACKER is a MongoDB-backed productivity workspace for routines, daily planning,
 
 ## Deploy the website and API together on Render
 
-The Render service can serve the React website and the Express API from the same URL. Keep the service connected to the same MongoDB database by setting `MONGODB_URI` in Render's environment variables. Use `npm start` as the start command; the `prestart` step builds the frontend before Express starts. The website is served at `/`, the health check is `/api/health`, and all authenticated API and Flutter sync routes remain under `/api/*`.
+The Render service can serve the React website and the Express API from the same URL. Keep the service connected to the same MongoDB database by setting `MONGODB_URI` in Render's environment variables. Use `npm start` as the start command; the `prestart` step builds the frontend before Express starts. The website is served at `/`, the health check is `/api/health` (it reports the connected database name, never credentials), and all authenticated API and Flutter sync routes remain under `/api/*`.
 
 ## Productivity system
 

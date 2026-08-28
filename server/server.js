@@ -48,6 +48,7 @@ app.get('/api/health', (_, res) => {
   res.status(connected ? 200 : 503).json({
     ok: connected,
     database: connected ? 'connected' : 'disconnected',
+    databaseName: connected ? mongoose.connection.name : null,
     message: connected ? undefined : 'MongoDB is offline. Start MongoDB Community Server, then restart TRACKER.'
   });
 });
