@@ -17,6 +17,18 @@ import { api, localDateKey } from './api.js';
 const initialTasks = [];
 const pageNames = ['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights', 'Pending', 'Archive'];
 const isTaskComplete = task => task.done || (task.kind === 'quantity' && task.value >= task.target);
+const storedValue = (key, fallback = '') => {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+};
+const storedUser = () => {
+  try {
+    const value = localStorage.getItem('tracker-user');
+    return value ? JSON.parse(value) : null;
+  } catch {
+    try { localStorage.removeItem('tracker-user'); } catch { /* storage may be unavailable in a restricted browser context */ }
+    return null;
+  }
+};
 const workspaceNavigation = [
   ['Overview', House],
   ['Plan', Target],
@@ -33,8 +45,8 @@ function ThemeGlyph({ dark }) { return dark ? <Sun aria-hidden="true" size={19} 
 
 export default function App() {
   const [tasks, setTasks] = useState(initialTasks);
-  const [token, setToken] = useState(() => localStorage.getItem('tracker-token') || '');
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('tracker-user') || 'null'));
+  const [token, setToken] = useState(() => storedValue('tracker-token'));
+  const [user, setUser] = useState(storedUser);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [insights, setInsights] = useState(null);
@@ -46,7 +58,7 @@ export default function App() {
   const [allRoutines, setAllRoutines] = useState([]);
   const [allSpecialTasks, setAllSpecialTasks] = useState([]);
   const [now, setNow] = useState(new Date());
-  const [dark, setDark] = useState(() => localStorage.getItem('tracker-theme') === 'dark');
+  const [dark, setDark] = useState(() => storedValue('tracker-theme') === 'dark');
   const [showModal, setShowModal] = useState(false);
   const [notice, setNotice] = useState('');
   const [authMessage, setAuthMessage] = useState('');
