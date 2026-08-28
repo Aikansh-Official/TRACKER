@@ -2,6 +2,23 @@
 
 TRACKER is a MongoDB-backed productivity workspace for routines, daily planning, focused work, goals, mood context, weekly reflection, and honest long-term analytics.
 
+## Android downloads
+
+Download the release APK that matches the experience you want:
+
+- [TRACKER Flutter edition](https://github.com/Aikansh-Official/TRACKER/releases/download/android-v1.0.0/TRACKER-Flutter-release.apk), the cross-platform Android app.
+- [TRACKER Kotlin edition](https://github.com/Aikansh-Official/TRACKER/releases/download/android-v1.0.0/TRACKER-Kotlin-release.apk), the native Android app.
+
+Both APKs are signed and passed Android signature verification. Their SHA-256 checksums and installation notes are available in the [Android downloads folder](downloads/android/README.md), and both files are hosted in the [TRACKER Android release](https://github.com/Aikansh-Official/TRACKER/releases/tag/android-v1.0.0).
+
+## About and support
+
+TRACKER is created and maintained by Aikansh Katiyar. Open-source contributions are welcome. Use [GitHub Issues](https://github.com/Aikansh-Official/TRACKER/issues) for bug reports, feature ideas, and contribution discussions.
+
+- [LinkedIn](https://www.linkedin.com/in/aikansh-katiyar-975663305/)
+- [GitHub](https://github.com/Aikansh-Official)
+- [Email](mailto:aikanshkatiyar@gmail.com)
+
 ## Run the full app
 
 1. Install MongoDB Community Server once. On this Windows machine TRACKER also supports the user-level server under `%LOCALAPPDATA%\MongoDBServer`.

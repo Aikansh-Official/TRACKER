@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AndroidLogo,
   CalendarBlank,
   ChartLineUp,
   CheckCircle,
+  DownloadSimple,
+  EnvelopeSimple,
+  GithubLogo,
   House,
+  LinkedinLogo,
   Moon,
   Repeat,
   Smiley,
@@ -15,6 +20,11 @@ import { QuickCapture, ReminderCenter, WeekPlanner } from './PlannerEnhancements
 import { api, localDateKey } from './api.js';
 
 const initialTasks = [];
+const projectUrl = 'https://github.com/Aikansh-Official/TRACKER';
+const androidReleaseTag = 'android-v1.0.0';
+const androidDownloadsUrl = `${projectUrl}/releases/tag/${androidReleaseTag}`;
+const flutterApkUrl = `${projectUrl}/releases/download/${androidReleaseTag}/TRACKER-Flutter-release.apk`;
+const kotlinApkUrl = `${projectUrl}/releases/download/${androidReleaseTag}/TRACKER-Kotlin-release.apk`;
 const pageNames = ['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights', 'Pending', 'Archive'];
 const isTaskComplete = task => task.done || (task.kind === 'quantity' && task.value >= task.target);
 const storedValue = (key, fallback = '') => {
@@ -184,7 +194,7 @@ export default function App() {
   const refreshCalendar = async () => { await Promise.all([loadDashboard(), loadLibrary(), loadInsights()]); };
 
   const finishAuthentication = ({ token: newToken, user: newUser }) => { localStorage.setItem('tracker-token', newToken); localStorage.setItem('tracker-user', JSON.stringify(newUser)); setAuthMessage(''); setUser(newUser); setToken(newToken); setNav('Overview'); };
-  if (!token) return <AuthScreen onAuthenticated={finishAuthentication} initialError={authMessage} initialMode={authMessage ? 'login' : 'register'} />;
+  if (!token) return <SiteFrame><AuthScreen onAuthenticated={finishAuthentication} initialError={authMessage} initialMode={authMessage ? 'login' : 'register'} /></SiteFrame>;
   const openComposer = () => { setFormError(''); setShowModal(true); };
   const signOut = () => {
     localStorage.removeItem('tracker-token');
@@ -195,7 +205,7 @@ export default function App() {
     window.location.reload();
   };
   const modal = showModal && <RoutineComposer form={form} setForm={setForm} error={formError} dark={dark} onSubmit={createTask} onClose={() => setShowModal(false)} />;
-  const overlays = page => <>{page}<MobileDock active={nav} onNavigate={setNav}/><QuickCapture token={token} dark={dark} onChanged={refreshCalendar} notify={setNotice}/><ReminderCenter tasks={allSpecialTasks} dark={dark} notify={setNotice}/>{notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}{modal}</>;
+  const overlays = page => <SiteFrame dark={dark}>{page}<MobileDock active={nav} onNavigate={setNav}/><QuickCapture token={token} dark={dark} onChanged={refreshCalendar} notify={setNotice}/><ReminderCenter tasks={allSpecialTasks} dark={dark} notify={setNotice}/>{celebration && <Celebration key={celebration.id} celebration={celebration}/>} {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}{modal}</SiteFrame>;
   if (nav === 'Overview') return overlays(<OverviewPage tasks={tasks} percent={percent} pendingCount={pendingCount} archivedCount={allRoutines.filter(routine => routine.status === 'ARCHIVED').length} moodData={moodData} dark={dark} onNavigate={setNav} onTheme={() => setDark(value => !value)} onSignOut={signOut} />);
   if (nav === 'Plan') return overlays(<ProductivityStudio token={token} dark={dark} onNavigate={setNav} onTheme={() => setDark(value => !value)} notify={setNotice} />);
   if (nav === 'Insights') return overlays(<InsightsPage data={insights} loading={insightsLoading} error={insightsError} dark={dark} onBack={() => setNav('Today')} onTheme={() => setDark(value => !value)} onNavigate={setNav} />);
@@ -205,7 +215,7 @@ export default function App() {
   if (nav === 'Pending') return overlays(<ManagePage mode="Pending" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={setNav} onMove={movePendingToToday} />);
   if (nav === 'Archive') return overlays(<ManagePage mode="Archive" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={setNav} onRestore={restoreRoutine} />);
 
-  return <main className={dark ? 'app today-app dark' : 'app today-app'}>
+  return overlays(<main className={dark ? 'app today-app dark' : 'app today-app'}>
     <section className="content today-content">
       <WorkspaceLinks active="Today" onNavigate={setNav}/>
       <header><div className="crumb"><span>Daily workspace</span><strong>/</strong><b>Today</b></div><div className="head-actions"><button className="mood-shortcut" onClick={() => setNav('Mood')}>How are you feeling?</button><button aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} className="round-button" onClick={() => setDark(value => !value)}><ThemeGlyph dark={dark}/></button></div></header>
@@ -219,13 +229,19 @@ export default function App() {
         <aside className="right-rail"><article className="streak-card real-data-card"><div className="flame">◌</div><div><p className="eyebrow">HISTORY</p><h3>Real <span>data only</span></h3><p>Your streaks and trends appear after you complete routines on different days.</p></div><button className="insight-link" onClick={() => setNav('Insights')}>View progress →</button></article><article className="recovery-card"><p className="eyebrow">HUMANE CONSISTENCY</p><h3>Rest can be intentional.</h3><p>Use a recovery day when life interrupts a routine. It stays visible but does not lower your consistency score.</p>{tasks.filter(task => task.kind !== 'special' && !task.done).slice(0,3).map(task => <button key={task.id} onClick={() => skipRoutine(task)}>{task.skipped ? `Restore ${task.title}` : `Rest today · ${task.title}`}</button>)}</article></aside>
       </section>
     </section>
-    <MobileDock active="Today" onNavigate={setNav}/>
-    <QuickCapture token={token} dark={dark} onChanged={refreshCalendar} notify={setNotice}/>
-    <ReminderCenter tasks={allSpecialTasks} dark={dark} notify={setNotice}/>
-    {celebration && <Celebration key={celebration.id} celebration={celebration}/>}
-    {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
-    {modal}
-  </main>;
+  </main>);
+}
+
+function AndroidDownloadBanner() {
+  return <a className="android-download-banner" href={androidDownloadsUrl} target="_blank" rel="noreferrer"><AndroidLogo aria-hidden="true" size={19} weight="fill"/><strong>Get the Android app</strong><span>Flutter and native Kotlin editions</span><DownloadSimple aria-hidden="true" size={18} weight="bold"/></a>;
+}
+
+function SiteFooter() {
+  return <footer className="site-footer"><div className="site-footer-inner"><section className="site-footer-about" aria-labelledby="footer-about"><div className="site-footer-brand"><span className="brand-mark">✦</span><strong>TRACKER</strong></div><h2 id="footer-about">About and support</h2><p>TRACKER is a productivity workspace created by Aikansh Katiyar. Open-source contributions are welcome.</p><a className="footer-contribute" href={`${projectUrl}/issues`} target="_blank" rel="noreferrer"><GithubLogo aria-hidden="true" size={18} weight="bold"/>Contribute or request support</a></section><section className="site-footer-links" aria-labelledby="footer-connect"><h2 id="footer-connect">Developer</h2><a href="https://www.linkedin.com/in/aikansh-katiyar-975663305/" target="_blank" rel="noreferrer"><LinkedinLogo aria-hidden="true" size={18} weight="bold"/>LinkedIn</a><a href="mailto:aikanshkatiyar@gmail.com"><EnvelopeSimple aria-hidden="true" size={18} weight="bold"/>aikanshkatiyar@gmail.com</a><a href="https://github.com/Aikansh-Official" target="_blank" rel="noreferrer"><GithubLogo aria-hidden="true" size={18} weight="bold"/>GitHub</a></section><section className="site-footer-downloads" aria-labelledby="footer-downloads"><h2 id="footer-downloads">Android downloads</h2><p>Choose the edition that fits your device and workflow.</p><a href={flutterApkUrl}><AndroidLogo aria-hidden="true" size={18} weight="fill"/><span><strong>Flutter edition</strong><small>Cross-platform TRACKER app</small></span><DownloadSimple aria-hidden="true" size={18} weight="bold"/></a><a href={kotlinApkUrl}><AndroidLogo aria-hidden="true" size={18} weight="fill"/><span><strong>Kotlin edition</strong><small>Native Android TRACKER app</small></span><DownloadSimple aria-hidden="true" size={18} weight="bold"/></a></section></div><div className="site-footer-bottom"><span>© {new Date().getFullYear()} Aikansh Katiyar</span><a href={projectUrl} target="_blank" rel="noreferrer">View source on GitHub</a></div></footer>;
+}
+
+function SiteFrame({ children, dark = false }) {
+  return <div className={dark ? 'site-frame dark' : 'site-frame'}><AndroidDownloadBanner/>{children}<SiteFooter/></div>;
 }
 
 function Celebration({ celebration }) {
