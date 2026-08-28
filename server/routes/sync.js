@@ -18,13 +18,23 @@ const taskPatch = task => ({
   priority: taskValue(task, 'priority', 'MEDIUM'),
   deadline: taskValue(task, 'deadline'),
   estimatedMinutes: Number(taskValue(task, 'estimatedMinutes', 30)),
+  preferredTime: taskValue(task, 'preferredTime'),
+  recurrence: taskValue(task, 'recurrence', { frequency: 'NONE', interval: 1, weekdays: [], endDate: null }),
+  seriesId: taskValue(task, 'seriesId'),
+  occurrenceDate: taskValue(task, 'occurrenceDate'),
+  subtasks: Array.isArray(taskValue(task, 'subtasks', [])) ? taskValue(task, 'subtasks', []).map(item => ({
+    title: String(item.title || '').trim().slice(0, 160),
+    done: Boolean(item.done),
+    completedAt: item.completedAt || null
+  })).filter(item => item.title) : [],
   reminderMinutes: taskValue(task, 'reminderMinutes'),
   status: taskValue(task, 'status', 'TODAY'),
   outcome: taskValue(task, 'outcome'),
   outcomeNote: String(taskValue(task, 'outcomeNote', '')),
   delegatedTo: String(taskValue(task, 'delegatedTo', '')),
   completedAt: taskValue(task, 'completedAt'),
-  resolvedAt: taskValue(task, 'resolvedAt')
+  resolvedAt: taskValue(task, 'resolvedAt'),
+  deletedAt: taskValue(task, 'deletedAt')
 });
 
 router.post('/push', async (req, res, next) => {
