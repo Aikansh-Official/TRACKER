@@ -18,6 +18,12 @@ const app = express();
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const frontendDist = path.join(projectRoot, 'dist');
 const localDevelopmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+
+// Serve the built frontend before API CORS middleware. Vite marks module
+// scripts as crossorigin, so browsers can include the page origin on asset
+// requests; those same-origin files should never be rejected by API CORS.
+app.use(express.static(frontendDist, { index: 'index.html' }));
+
 app.use(cors({
   origin(origin, callback) {
     // Vite may choose 5174, 5175, etc. when another development tab is already running.
@@ -27,8 +33,8 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '200kb' }));
 // Render serves the React build and the API from one origin. API routes below
-// keep their existing contract, while Vite assets are served from /dist.
-app.use(express.static(frontendDist, { index: 'index.html' }));
+// keep their existing contract; frontend files were served above so they are
+// independent from API-origin validation.
 app.get('/api/health', (_, res) => {
   const connected = mongoose.connection.readyState === 1;
   res.status(connected ? 200 : 503).json({
