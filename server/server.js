@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { connectDatabase } from './config/database.js';
 import authRoutes from './routes/auth.js';
 import routineRoutes from './routes/routines.js';
@@ -13,6 +15,8 @@ import productivityRoutes from './routes/productivity.js';
 import syncRoutes from './routes/sync.js';
 
 const app = express();
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const frontendDist = path.join(projectRoot, 'dist');
 const localDevelopmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 app.use(cors({
   origin(origin, callback) {
@@ -22,6 +26,9 @@ app.use(cors({
   }
 }));
 app.use(express.json({ limit: '200kb' }));
+// Render serves the React build and the API from one origin. API routes below
+// keep their existing contract, while Vite assets are served from /dist.
+app.use(express.static(frontendDist, { index: 'index.html' }));
 app.get('/api/health', (_, res) => {
   const connected = mongoose.connection.readyState === 1;
   res.status(connected ? 200 : 503).json({
@@ -38,7 +45,12 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/moods', moodRoutes);
 app.use('/api/productivity', productivityRoutes);
 app.use('/api/sync', syncRoutes);
-app.use((_, res) => res.status(404).json({ message: 'API route not found.' }));
+app.use((req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ message: 'API route not found.' });
+  return res.sendFile(path.join(frontendDist, 'index.html'), error => {
+    if (error && !res.headersSent) res.status(error.statusCode || 404).send('TRACKER frontend build is not available yet.');
+  });
+});
 app.use((error, _, res, __) => {
   console.error(error);
   const databaseOffline = mongoose.connection.readyState !== 1
