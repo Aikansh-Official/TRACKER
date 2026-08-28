@@ -1,0 +1,38 @@
+/* Focused Today layout: keep task rows compact even when the right rail is taller. */
+.today-app .today-content {
+  width: min(1280px, calc(100% - 48px));
+  max-width: 1280px;
+}
+
+.today-app .task-layout {
+  align-items: start;
+}
+
+.today-app .task-list {
+  align-content: start;
+}
+
+.today-app .today-header {
+  margin-top: 28px;
+  margin-bottom: 14px;
+}
+
+/* Completion feedback remains expressive without blocking the next action. */
+.celebration-message {
+  animation-duration: 1.5s;
+}
+
+.day-celebration .celebration-message,
+.day-celebration .celebration-shade {
+  animation-duration: 3.2s;
+}
+
+@media (max-width: 740px) {
+  .today-app .today-content {
+    width: calc(100% - 32px);
+  }
+
+  .today-app .today-header {
+    margin-top: 24px;
+  }
+}

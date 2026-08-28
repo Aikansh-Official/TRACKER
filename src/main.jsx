@@ -19,6 +19,7 @@ import './celebration.css';
 import './planner-enhancements.css';
 import './recovery.css';
 import './impeccable.css';
+import './today-density.css';
 
 createRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMode>);
 

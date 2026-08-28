@@ -71,7 +71,7 @@ export default function App() {
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 2600); return () => clearTimeout(timer); }, [notice]);
   useEffect(() => {
     if (!celebration) return undefined;
-    const timer = setTimeout(() => setCelebration(null), celebration.kind === 'day' ? 5200 : 2400);
+    const timer = setTimeout(() => setCelebration(null), celebration.kind === 'day' ? 3200 : 1500);
     return () => clearTimeout(timer);
   }, [celebration]);
   useEffect(() => { if (token) { loadDashboard(); loadLibrary(); loadInsights(); loadMood(); } }, [token]);
