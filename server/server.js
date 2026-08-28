@@ -18,6 +18,14 @@ const app = express();
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const frontendDist = path.join(projectRoot, 'dist');
 const localDevelopmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+const configuredOrigins = new Set([
+  process.env.CLIENT_ORIGIN,
+  process.env.RENDER_EXTERNAL_URL,
+  // Render's public URL is the same origin that serves the frontend. Keeping
+  // it here makes the deployed app's browser requests work even when Render
+  // has not exposed RENDER_EXTERNAL_URL to the service process.
+  'https://tracker-rw9d.onrender.com'
+].filter(Boolean));
 
 // Serve the built frontend before API CORS middleware. Vite marks module
 // scripts as crossorigin, so browsers can include the page origin on asset
@@ -27,7 +35,7 @@ app.use(express.static(frontendDist, { index: 'index.html' }));
 app.use(cors({
   origin(origin, callback) {
     // Vite may choose 5174, 5175, etc. when another development tab is already running.
-    if (!origin || localDevelopmentOrigin.test(origin) || origin === process.env.CLIENT_ORIGIN) return callback(null, true);
+    if (!origin || localDevelopmentOrigin.test(origin) || configuredOrigins.has(origin)) return callback(null, true);
     return callback(new Error('This browser origin is not allowed to call the API.'));
   }
 }));
