@@ -14,7 +14,7 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { title, description = '', type, targetQuantity, unit, category = 'OTHER', frequency = 'DAILY', scheduledDays = [], weeklyTarget = 3, estimatedMinutes = 25, preferredTime = null, minimumTarget = 1, stretchTarget, startDate, endDate } = req.body;
-    const isTemporary = type === 'TEMPORARY';
+    const isTemporary = type === 'TEMPORARY' || req.body.isTemporary === true;
     if (!title || !['BINARY', 'QUANTIFIABLE', 'TEMPORARY'].includes(type)) return res.status(400).json({ message: 'A routine title and valid type are required.' });
     if (isTemporary && !endDate) return res.status(400).json({ message: 'Temporary routines need an end date.' });
     const target = type === 'BINARY' ? 1 : Number(targetQuantity || 1);
