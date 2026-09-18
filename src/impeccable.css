@@ -1136,7 +1136,7 @@ textarea::placeholder {
 .studio-hero,
 .hero,
 .auth-card {
-  animation: tracker-rise .65s var(--tracker-ease) both;
+  animation: tracker-rise .2s var(--tracker-ease) both;
 }
 
 .overview-metrics>article,
@@ -1145,18 +1145,18 @@ textarea::placeholder {
 .insight-stats>article,
 .reference-card,
 .mood-layout>* {
-  animation: tracker-rise .55s var(--tracker-ease) both;
+  animation: tracker-rise .18s var(--tracker-ease) both;
 }
 
 .overview-metrics>article:nth-child(2),
 .overview-actions>button:nth-child(2),
-.task-card:nth-child(2) { animation-delay: 55ms; }
+.task-card:nth-child(2) { animation-delay: 15ms; }
 .overview-metrics>article:nth-child(3),
 .overview-actions>button:nth-child(3),
-.task-card:nth-child(3) { animation-delay: 110ms; }
+.task-card:nth-child(3) { animation-delay: 30ms; }
 .overview-metrics>article:nth-child(4),
 .overview-actions>button:nth-child(4),
-.task-card:nth-child(4) { animation-delay: 165ms; }
+.task-card:nth-child(4) { animation-delay: 45ms; }
 
 .pulse,
 .reminder-button b {

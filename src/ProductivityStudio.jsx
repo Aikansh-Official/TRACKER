@@ -31,7 +31,12 @@ export default function ProductivityStudio({ token, dark, onNavigate, onTheme, n
   };
 
   useEffect(() => { load(); }, [token]);
-  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  useEffect(() => {
+    if (!data?.focus?.active || section !== 'Focus') return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [data?.focus?.active?._id, section]);
   useEffect(() => {
     const activeId = data?.focus?.active?._id;
     if (!activeId) return undefined;

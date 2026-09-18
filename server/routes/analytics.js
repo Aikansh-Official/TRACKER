@@ -13,11 +13,11 @@ const daysBetween = (start, end) => { const dates = []; for (let date = start; d
 
 router.get('/overview', async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id).select('timezone').lean();
     const today = dateKey(new Date(), user?.timezone);
     const [records, tasks] = await Promise.all([
-      DailyRoutineRecord.find({ userId: req.user.id }).populate('routineId').sort({ date: 1 }),
-      SpecialTask.find({ userId: req.user.id, scheduledDate: { $lte: today }, status: { $nin: ['ARCHIVED', 'SKIPPED', 'DROPPED', 'DELEGATED', 'SCHEDULED'] } }).sort({ scheduledDate: 1 })
+      DailyRoutineRecord.find({ userId: req.user.id }).populate('routineId', 'title category').sort({ date: 1 }).lean(),
+      SpecialTask.find({ userId: req.user.id, scheduledDate: { $lte: today }, status: { $nin: ['ARCHIVED', 'SKIPPED', 'DROPPED', 'DELEGATED', 'SCHEDULED'] } }).select('scheduledDate status').sort({ scheduledDate: 1 }).lean()
     ]);
     const validRecords = records.filter(record => record.routineId && !record.skipped);
     const allDates = [...validRecords.map(record => record.date), ...tasks.map(task => task.scheduledDate)].filter(Boolean).sort();

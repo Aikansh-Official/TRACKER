@@ -30,7 +30,8 @@ const configuredOrigins = new Set([
 // Serve the built frontend before API CORS middleware. Vite marks module
 // scripts as crossorigin, so browsers can include the page origin on asset
 // requests; those same-origin files should never be rejected by API CORS.
-app.use(express.static(frontendDist, { index: 'index.html' }));
+app.use('/assets', express.static(path.join(frontendDist, 'assets'), { maxAge: '1y', immutable: true }));
+app.use(express.static(frontendDist, { index: 'index.html', maxAge: 0 }));
 
 app.use(cors({
   origin(origin, callback) {
