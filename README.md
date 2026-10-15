@@ -27,6 +27,8 @@ A personal workspace for the work you want to finish—and the habits you want t
 | **Pending & Archive** | Find unfinished work and restore routines when you need them again. |
 | **About** | Find support, source code, and Android downloads. |
 
+Use the floating **Sync** button to refresh tasks, routines, mood, and Overview from your account. Website edits save automatically; the button reports refresh failures and supports retry. Reminders are accessible inside Plan.
+
 Inside Plan, expand **Focus, goals, and reflection** for focus sessions, milestones, daily intentions, and weekly reviews. Events, recurrence, checklists, reminders, JSON export, and calendar export remain available. The web app also supports installation as a PWA.
 
 ## Your phone works offline

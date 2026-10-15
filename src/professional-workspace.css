@@ -89,3 +89,15 @@ body { background:var(--tracker-bg); }
 
 .workspace-shell #overview-insights .insights-header { display: block; margin-top: 32px !important; }
 .workspace-shell #overview-insights .insight-stats strong { color: var(--tracker-text); }
+
+.workspace-sync { position:fixed; right:22px; bottom:22px; z-index:75; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+.workspace-sync.is-raised { bottom:82px; }
+.workspace-sync-button { display:flex; align-items:center; gap:9px; min-height:48px; padding:12px 18px; border:1px solid var(--tracker-line); border-radius:12px; background:var(--tracker-surface); color:var(--tracker-text); box-shadow:var(--tracker-shadow-float); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+.workspace-sync-button:disabled { cursor:wait; opacity:.7; }
+.workspace-sync-button:focus-visible { outline:2px solid var(--tracker-accent); outline-offset:3px; }
+.sync-message { max-width:min(300px,calc(100vw - 40px)); padding:12px 16px; margin:0; border:1px solid var(--tracker-line); border-radius:12px; background:var(--tracker-surface); color:var(--tracker-text); box-shadow:var(--tracker-shadow-float); font-size:13px; line-height:1.5; }
+.sync-message.is-error { border-color:#c24b40; }
+.workspace-shell .reminder-inline { position:relative; right:auto !important; bottom:auto !important; z-index:1; margin:16px 0; }
+.workspace-shell .reminder-inline .reminder-button { width:auto; min-height:44px; padding:10px 18px; }
+.workspace-shell .reminder-inline aside { position:static; margin-top:10px; width:100%; }
+@media(max-width:760px) { .workspace-sync { right:14px; bottom:84px; } .workspace-sync.is-raised { bottom:140px; } }

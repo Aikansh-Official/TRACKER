@@ -9,9 +9,10 @@ import {
 const OverviewInsights = lazy(() => import('./components/OverviewInsights.jsx'));
 const MoodPage = lazy(() => import('./MoodPage.jsx'));
 import { WorkspaceLinks, ThemeGlyph } from './WorkspaceNavigation.jsx';
-import { QuickCapture, ReminderCenter } from './PlannerEnhancements.jsx';
+import { QuickCapture } from './PlannerEnhancements.jsx';
 import { api, clearApiCache, localDateKey } from './api.js';
 import AndroidDownloadBanner from './components/AndroidDownloadBanner.jsx';
+import SyncButton from './components/SyncButton.jsx';
 import PlanningPage from './pages/PlanningPage.jsx';
 import WorkspaceShell from './WorkspaceShell.jsx';
 import OverviewDashboard from './OverviewDashboard.jsx';
@@ -140,26 +141,26 @@ export default function App() {
       const dashboard = await api('/dashboard', { token });
       const routineTasks = dashboard.records.map(record => ({ id: record.routineId._id, title: record.routineId.title, note: record.skipped ? `Rest day · ${record.skipReason || 'intentionally skipped'}` : record.routineId.type === 'QUANTIFIABLE' ? `${record.completedQuantity} of ${record.target} ${record.routineId.unit}` : record.routineId.isTemporary ? `Until ${record.routineId.endDate}` : 'Daily routine', kind: record.routineId.type === 'QUANTIFIABLE' ? 'quantity' : record.routineId.isTemporary ? 'temporary' : 'routine', value: record.completedQuantity, target: record.target, done: record.completed, skipped: record.skipped, icon: record.skipped ? '☕' : record.routineId.type === 'QUANTIFIABLE' ? '◉' : record.routineId.isTemporary ? '⌁' : '◒', color: record.routineId.type === 'QUANTIFIABLE' ? 'blue' : record.routineId.isTemporary ? 'mint' : 'violet' }));
       const specialTasks = dashboard.specialTasks.map(task => ({ id: task._id, title: task.title, note: task.allDay ? `All-day ${task.itemType === 'EVENT' ? 'event' : 'task'}` : task.itemType === 'EVENT' && task.startTime ? `${task.startTime}${task.deadline ? `-${task.deadline}` : ''} · event` : task.deadline ? `Due · ${task.deadline}` : `${task.priority.toLowerCase()} priority`, kind: 'special', done: task.status === 'COMPLETED', icon: task.itemType === 'EVENT' ? '◆' : '✦', color: 'coral' }));
-      setTasks([...routineTasks, ...specialTasks]); setPendingCount(dashboard.pendingCount); setUser(dashboard.user); localStorage.setItem('tracker-user', JSON.stringify(dashboard.user));
-    } catch (error) { setNotice(error.message); } finally { setLoading(false); }
+      setTasks([...routineTasks, ...specialTasks]); setPendingCount(dashboard.pendingCount); setUser(dashboard.user); localStorage.setItem('tracker-user', JSON.stringify(dashboard.user)); return true;
+    } catch (error) { setNotice(error.message); return false; } finally { setLoading(false); }
   }
   async function loadLibrary() {
     try {
       const [routinePayload, taskPayload] = await Promise.all([api('/routines', { token }), api('/tasks', { token })]);
-      setAllRoutines(routinePayload.routines); setAllSpecialTasks(taskPayload.tasks);
-    } catch (error) { setNotice(error.message); }
+      setAllRoutines(routinePayload.routines); setAllSpecialTasks(taskPayload.tasks); return true;
+    } catch (error) { setNotice(error.message); return false; }
   }
   async function loadInsights() {
     setInsightsLoading(true); setInsightsError('');
-    try { setInsights(await api('/analytics/overview', { token })); } catch (error) { setInsightsError(error.message); setNotice(error.message); } finally { setInsightsLoading(false); }
+    try { setInsights(await api('/analytics/overview', { token })); return true; } catch (error) { setInsightsError(error.message); setNotice(error.message); return false; } finally { setInsightsLoading(false); }
   }
   async function loadMood() {
     setMoodLoading(true);
     try {
       const today = localDateKey();
       const [analytics, current] = await Promise.all([api('/moods/analytics/overview', { token }), api(`/moods?from=${today}&to=${today}`, { token })]);
-      setMoodData(analytics); setMoodEntry(current.entries[0] || null);
-    } catch (error) { setNotice(error.message); } finally { setMoodLoading(false); }
+      setMoodData(analytics); setMoodEntry(current.entries[0] || null); return true;
+    } catch (error) { setNotice(error.message); return false; } finally { setMoodLoading(false); }
   }
   const toggle = async (id) => {
     const task = tasks.find(item => item.id === id); if (!task) return;
@@ -202,6 +203,12 @@ export default function App() {
   const saveMood = async values => { try { await api(`/moods/${localDateKey()}`, { token, method: 'PUT', body: values }); await loadMood(); setNotice('Mood check-in saved to MongoDB'); return true; } catch (error) { setNotice(error.message); return false; } };
   const refreshCalendar = async () => { await Promise.all([loadDashboard(), loadLibrary(), loadInsights()]); };
 
+  const syncWorkspace = async () => {
+    clearApiCache();
+    const results = await Promise.all([loadDashboard(), loadLibrary(), loadInsights(), loadMood()]);
+    if (results.some(result => !result)) throw new Error('Some data could not sync. Check your connection and retry.');
+  };
+
   const finishAuthentication = ({ token: newToken, user: newUser }) => { localStorage.setItem('tracker-token', newToken); localStorage.setItem('tracker-user', JSON.stringify(newUser)); setAuthMessage(''); setUser(newUser); setToken(newToken); setNav('Plan'); };
   if (!token) return <SiteFrame><AuthScreen onAuthenticated={finishAuthentication} initialError={authMessage} initialMode={authMessage ? 'login' : 'register'} /></SiteFrame>;
   const openComposer = () => { setFormError(''); setShowModal(true); };
@@ -214,7 +221,7 @@ export default function App() {
     window.location.reload();
   };
   const modal = showModal && <RoutineComposer form={form} setForm={setForm} error={formError} dark={dark} onSubmit={createTask} onClose={() => setShowModal(false)} />;
-  const overlays = page => <WorkspaceShell active={nav} onNavigate={page => setNav(normalizePage(page))} dark={dark} onTheme={() => setDark(value => !value)} onSignOut={signOut} user={user}><SiteFrame dark={dark} showFooter={false}><Suspense fallback={<main className="page-loading" role="status">Opening {nav.toLowerCase()}…</main>}>{page}</Suspense>{nav !== 'Plan' && nav !== 'Today' && nav !== 'About' && <QuickCapture token={token} dark={dark} onChanged={refreshCalendar} notify={setNotice}/>}{nav !== 'About' && <ReminderCenter tasks={allSpecialTasks} dark={dark} notify={setNotice}/>}{celebration && <Celebration key={celebration.id} celebration={celebration}/>} {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}{modal}</SiteFrame></WorkspaceShell>;
+  const overlays = page => <WorkspaceShell active={nav} onNavigate={page => setNav(normalizePage(page))} dark={dark} onTheme={() => setDark(value => !value)} onSignOut={signOut} user={user}><SiteFrame dark={dark} showFooter={false}><Suspense fallback={<main className="page-loading" role="status">Opening {nav.toLowerCase()}…</main>}>{page}</Suspense>{nav !== 'Plan' && nav !== 'Today' && nav !== 'About' && <QuickCapture token={token} dark={dark} onChanged={refreshCalendar} notify={setNotice}/>}{nav !== 'About' && <SyncButton onSync={syncWorkspace} raised={nav !== 'Plan'}/>}{celebration && <Celebration key={celebration.id} celebration={celebration}/>} {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}{modal}</SiteFrame></WorkspaceShell>;
   if (nav === 'About') return overlays(<main className="workspace-page"><header className="workspace-heading"><div><h1>About TRACKER</h1></div></header><SiteFooter/></main>);
   if (nav === 'Overview') return overlays(<OverviewDashboard tasks={tasks} percent={percent} pendingCount={pendingCount} insights={insights} loading={insightsLoading} error={insightsError} user={user} onNavigate={page => setNav(normalizePage(page))} onAdd={openComposer} onRetry={loadInsights}><Suspense fallback={<p role="status">Loading insights…</p>}><OverviewInsights data={insights} loading={insightsLoading} error={insightsError} dark={dark} onBack={() => setNav('Plan')} onRetry={loadInsights}/></Suspense></OverviewDashboard>);
   if (nav === 'Plan' || nav === 'Today') return overlays(<PlanningPage dailyScores={insights?.daily || []} token={token} tasks={allSpecialTasks} routines={allRoutines} todayTasks={tasks} loading={loading} dark={dark} onChanged={refreshCalendar} notify={setNotice} onToggle={toggle} onIncrease={increase} onDecrease={decrease} onNavigate={page => setNav(normalizePage(page))}/>);

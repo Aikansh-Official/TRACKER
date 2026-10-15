@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, localDateKey } from '../api.js';
 import { WeekPlanner } from '../WeekPlanner.jsx';
 import SuggestionPanel from '../components/SuggestionPanel.jsx';
+import { ReminderCenter } from '../PlannerEnhancements.jsx';
 import TodayTasks from '../TodayTasks.jsx';
 import ProductivityStudio from '../ProductivityStudio.jsx';
 import '../planning.css';
@@ -81,7 +82,7 @@ export default function PlanningPage({ token, tasks, routines, todayTasks, loadi
     </section>
     {date === localDateKey() && todayTasks.some(task => task.kind !== 'special') && <section><h2>Today's routines</h2><TodayTasks tasks={todayTasks.filter(task => task.kind !== 'special')} loading={loading} onToggle={onToggle} onIncrease={onIncrease} onDecrease={onDecrease}/></section>}
     <SuggestionPanel token={token}/>
-    <details className="planning-extras"><summary>Focus, goals, and reflection</summary><ProductivityStudio token={token} dark={dark} onNavigate={onNavigate} notify={notify}/></details>
+    <ReminderCenter tasks={tasks} dark={dark} notify={notify}/><details className="planning-extras"><summary>Focus, goals, and reflection</summary><ProductivityStudio token={token} dark={dark} onNavigate={onNavigate} notify={notify}/></details>
     {editing && <div className="modal-backdrop"><form ref={editorRef} className="modal planning-editor" role="dialog" aria-modal="true" aria-labelledby="task-editor-title" onSubmit={save} onKeyDown={editorKeyboard}><button type="button" className="close" disabled={busy} aria-label="Close task editor" onClick={() => setEditing(null)}>×</button><h2 id="task-editor-title">{editing === 'new' ? 'Add task' : 'Edit task'}</h2>
       <label>Title<input autoFocus required maxLength={120} value={form.title} onChange={event => setForm({...form,title:event.target.value})}/></label>
       <label>Item<select value={form.itemType || 'TASK'} onChange={event => setForm({...form,itemType:event.target.value})}><option value="TASK">Task</option><option value="EVENT">Event</option></select></label>
