@@ -12,6 +12,8 @@ import dashboardRoutes from './routes/dashboard.js';
 import analyticsRoutes from './routes/analytics.js';
 import moodRoutes from './routes/moods.js';
 import productivityRoutes from './routes/productivity.js';
+import { migrateTaskSync } from './services/migrateTaskSync.js';
+import suggestionRoutes from './routes/suggestions.js';
 import syncRoutes from './routes/sync.js';
 
 const app = express();
@@ -61,6 +63,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/moods', moodRoutes);
 app.use('/api/productivity', productivityRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/suggestions', suggestionRoutes);
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ message: 'API route not found.' });
   return res.sendFile(path.join(frontendDist, 'index.html'), error => {
@@ -75,8 +78,8 @@ app.use((error, _, res, __) => {
     ? 'MongoDB is offline. Start MongoDB Community Server, then restart TRACKER.'
     : error.name === 'ValidationError'
       ? error.message
-      : 'Something went wrong. Please try again.';
-  res.status(databaseOffline ? 503 : error.status || 500).json({ message });
+      : error.status === 400 ? error.message : 'Something went wrong. Please try again.';
+  res.status(databaseOffline ? 503 : error.status || (['ValidationError', 'CastError'].includes(error.name) ? 400 : 500)).json({ message });
 });
 
-connectDatabase().then(() => app.listen(process.env.PORT || 5000, () => console.log(`API listening on http://localhost:${process.env.PORT || 5000}`))).catch(error => { console.error('MongoDB connection failed:', error.message); process.exit(1); });
+connectDatabase().then(migrateTaskSync).then(() => app.listen(process.env.PORT || 5000, () => console.log(`API listening on http://localhost:${process.env.PORT || 5000}`))).catch(error => { console.error('MongoDB connection failed:', error.message); process.exit(1); });

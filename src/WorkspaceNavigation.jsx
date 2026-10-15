@@ -1,12 +1,9 @@
-import { CalendarBlank, ChartLineUp, CheckCircle, House, Moon, Repeat, Smiley, Sun, Target } from '@phosphor-icons/react';
+import { House, Moon, Repeat, Smiley, Sun, Target } from '@phosphor-icons/react';
 export const workspaceNavigation = [
   ['Overview', House],
   ['Plan', Target],
-  ['Today', CheckCircle],
   ['Routines', Repeat],
   ['Mood', Smiley],
-  ['Calendar', CalendarBlank],
-  ['Insights', ChartLineUp],
 ];
 
 export function ThemeGlyph({ dark }) { return dark ? <Sun aria-hidden="true" size={19} weight="bold"/> : <Moon aria-hidden="true" size={19} weight="bold"/>; }

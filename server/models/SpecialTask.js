@@ -6,6 +6,11 @@ const specialTaskSchema = new mongoose.Schema({
   title: { type: String, trim: true, required: true, maxlength: 120 },
   description: { type: String, trim: true, default: '' },
   itemType: { type: String, enum: ['TASK', 'EVENT'], default: 'TASK', index: true },
+  taskType: { type: String, enum: ['ONE_TIME', 'MEASURABLE'], default: 'ONE_TIME' },
+  target: { type: Number, min: 1, max: 1000000, default: 1 },
+  progress: { type: Number, min: 0, default: 0 },
+  unit: { type: String, maxlength: 40, default: 'times' },
+  lastMutationId: { type: String, default: null },
   originalDate: { type: String, required: true },
   scheduledDate: { type: String, required: true, index: true },
   allDay: { type: Boolean, default: false },
@@ -39,8 +44,29 @@ const specialTaskSchema = new mongoose.Schema({
   revision: { type: Number, required: true, default: 1, min: 1 },
   syncUpdatedAt: { type: Date, required: true, default: Date.now },
   deletedAt: { type: Date, default: null }
-}, { timestamps: true });
+}, { timestamps: true, optimisticConcurrency: true });
 
+// Every website write advances the same revision used by the phone.
+specialTaskSchema.pre('save', function () {
+  if (!this.isNew && !this.$locals.syncWrite) {
+    this.revision += 1;
+    this.syncUpdatedAt = new Date();
+    this.lastMutationId = null;
+  }
+});
+for (const operation of ['updateMany', 'updateOne', 'findOneAndUpdate']) {
+  specialTaskSchema.pre(operation, function () {
+    const update = this.getUpdate();
+    update.$inc = { ...update.$inc, revision: 1, __v: 1 };
+    update.$set = { ...update.$set, syncUpdatedAt: new Date(), lastMutationId: null };
+  });
+}
+// Tombstones remain available to synchronization but are hidden from normal views.
+for (const operation of ['find', 'findOne', 'countDocuments', 'updateMany', 'findOneAndUpdate']) {
+  specialTaskSchema.pre(operation, function () {
+    if (!('deletedAt' in this.getFilter())) this.where({ deletedAt: null });
+  });
+}
 specialTaskSchema.index({ userId: 1, status: 1, scheduledDate: 1 });
 specialTaskSchema.index({ userId: 1, seriesId: 1, occurrenceDate: 1 }, { sparse: true });
 specialTaskSchema.index({ userId: 1, syncId: 1 }, { unique: true });

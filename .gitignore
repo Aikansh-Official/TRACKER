@@ -4,3 +4,8 @@ dist/
 *.log
 /downloads/android/*.apk
 /output/playwright/
+
+.playwright-cli/
+
+.idea/
+build-output.txt

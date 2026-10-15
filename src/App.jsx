@@ -6,22 +6,24 @@ import {
   GithubLogo,
   LinkedinLogo,
 } from '@phosphor-icons/react';
-const ProductivityStudio = lazy(() => import('./ProductivityStudio.jsx'));
-const InsightsPage = lazy(() => import('./InsightsPage.jsx'));
+const OverviewInsights = lazy(() => import('./components/OverviewInsights.jsx'));
 const MoodPage = lazy(() => import('./MoodPage.jsx'));
-const CalendarPage = lazy(() => import('./CalendarPage.jsx'));
-import { workspaceNavigation, WorkspaceLinks, ThemeGlyph } from './WorkspaceNavigation.jsx';
+import { WorkspaceLinks, ThemeGlyph } from './WorkspaceNavigation.jsx';
 import { QuickCapture, ReminderCenter } from './PlannerEnhancements.jsx';
 import { api, clearApiCache, localDateKey } from './api.js';
-import TodayTasks from './TodayTasks.jsx';
+import AndroidDownloadBanner from './components/AndroidDownloadBanner.jsx';
+import PlanningPage from './pages/PlanningPage.jsx';
+import WorkspaceShell from './WorkspaceShell.jsx';
+import OverviewDashboard from './OverviewDashboard.jsx';
 
 const initialTasks = [];
 const projectUrl = 'https://github.com/Aikansh-Official/TRACKER';
-const androidReleaseTag = 'android-v1.0.0';
+const androidReleaseTag = 'android-v2.1.0';
 const androidDownloadsUrl = `${projectUrl}/releases/tag/${androidReleaseTag}`;
-const flutterApkUrl = `${projectUrl}/releases/download/${androidReleaseTag}/TRACKER-Flutter-release.apk`;
+const legacyAndroidUrl = `${projectUrl}/releases/tag/android-v1.0.0`;
 const kotlinApkUrl = `${projectUrl}/releases/download/${androidReleaseTag}/TRACKER-Kotlin-release.apk`;
-const pageNames = ['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights', 'Pending', 'Archive'];
+const normalizePage = page => ['Today', 'Calendar'].includes(page) ? 'Plan' : page === 'Insights' ? 'Overview' : page;
+const pageNames = ['Overview', 'Plan', 'Today', 'Routines', 'Mood', 'Calendar', 'Insights', 'Pending', 'Archive', 'About'];
 const isTaskComplete = task => task.done || (task.kind === 'quantity' && task.value >= task.target);
 const storedValue = (key, fallback = '') => {
   try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
@@ -37,7 +39,6 @@ const storedUser = () => {
 };
 
 function Icon({ children, className = '' }) { return <span className={`icon ${className}`}>{children}</span>; }
-function Circle({ value }) { return <div className="progress-ring" style={{ '--progress': `${value * 3.6}deg` }}><div><strong>{value}%</strong><span>complete</span></div></div>; }
 
 export default function App() {
   const [tasks, setTasks] = useState(initialTasks);
@@ -54,12 +55,12 @@ export default function App() {
   const [allRoutines, setAllRoutines] = useState([]);
   const [allSpecialTasks, setAllSpecialTasks] = useState([]);
   const [now, setNow] = useState(new Date());
-  const [dark, setDark] = useState(() => storedValue('tracker-theme') === 'dark');
+  const [dark, setDark] = useState(() => storedValue('tracker-theme', 'dark') === 'dark');
   const [showModal, setShowModal] = useState(false);
   const [notice, setNotice] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [celebration, setCelebration] = useState(null);
-  const [nav, setNav] = useState(() => { const saved = window.location.hash.slice(1); return pageNames.includes(saved) ? saved : 'Overview'; });
+  const [nav, setNav] = useState(() => { const saved = window.location.hash.slice(1); return pageNames.includes(saved) ? normalizePage(saved) : 'Plan'; });
   const [form, setForm] = useState({ title: '', description: '', type: 'routine', target: '', unit: 'times', category: 'OTHER', endDate: '', priority: 'MEDIUM', deadline: '', frequency: 'DAILY', scheduledDays: [], weeklyTarget: 3, estimate: 25, preferredTime: '', minimumTarget: 1, stretchTarget: '' });
   const [formError, setFormError] = useState('');
   useEffect(() => { clearApiCache(); }, [token]);
@@ -82,7 +83,7 @@ export default function App() {
   }, [celebration]);
   const todayKey = localDateKey(now);
   useEffect(() => { if (token) { loadDashboard(); loadLibrary(); } }, [token, todayKey]);
-  useEffect(() => { if (token && (nav === 'Insights' || nav === 'Calendar')) loadInsights(); }, [token, nav]);
+  useEffect(() => { if (token && (nav === 'Overview' || nav === 'Plan')) loadInsights(); }, [token, nav]);
   useEffect(() => { if (token && (nav === 'Mood' || nav === 'Overview')) loadMood(); }, [token, nav, todayKey]);
   useEffect(() => {
     if (!token) return;
@@ -91,16 +92,18 @@ export default function App() {
       clearApiCache();
       loadDashboard();
       loadLibrary();
-      if (nav === 'Insights' || nav === 'Calendar') loadInsights();
+      if (nav === 'Overview' || nav === 'Plan') loadInsights();
     };
     document.addEventListener('visibilitychange', refresh);
-    return () => document.removeEventListener('visibilitychange', refresh);
+    window.addEventListener('online', refresh);
+    const timer = setInterval(refresh, 30000);
+    return () => { document.removeEventListener('visibilitychange', refresh); window.removeEventListener('online', refresh); clearInterval(timer); };
   }, [token, nav]);
   useEffect(() => {
     if (token) window.location.hash = nav;
     else if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
   }, [nav, token]);
-  useEffect(() => { const syncPage = () => { const page = window.location.hash.slice(1); if (pageNames.includes(page)) setNav(page); }; window.addEventListener('hashchange', syncPage); return () => window.removeEventListener('hashchange', syncPage); }, []);
+  useEffect(() => { const syncPage = () => { const page = window.location.hash.slice(1); if (pageNames.includes(page)) setNav(normalizePage(page)); }; window.addEventListener('hashchange', syncPage); return () => window.removeEventListener('hashchange', syncPage); }, []);
   useEffect(() => {
     localStorage.setItem('tracker-theme', dark ? 'dark' : 'light');
     // Authentication is intentionally a light surface even when the signed-in workspace remembers dark mode.
@@ -130,8 +133,6 @@ export default function App() {
   }, [showModal]);
   const scoredTasks = useMemo(() => tasks.filter(task => !task.skipped), [tasks]);
   const percent = useMemo(() => scoredTasks.length ? Math.round(scoredTasks.reduce((total, task) => total + (task.kind === 'quantity' ? task.value / task.target : task.done ? 1 : 0), 0) / scoredTasks.length * 100) : 0, [scoredTasks]);
-  const completed = scoredTasks.filter(isTaskComplete).length;
-  const formattedDate = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   async function loadDashboard() {
     setLoading(true);
@@ -191,7 +192,7 @@ export default function App() {
     try {
       if (form.type === 'special') await api('/tasks', { token, method: 'POST', body: { title: form.title, description: form.description, priority: form.priority, deadline: form.deadline || null, estimatedMinutes: Number(form.estimate || 30), preferredTime: form.preferredTime || null } });
       else await api('/routines', { token, method: 'POST', body: { title: form.title, description: form.description, type: form.type === 'quantity' ? 'QUANTIFIABLE' : form.type === 'temporary' ? 'TEMPORARY' : 'BINARY', category: form.category, targetQuantity: Number(form.target || 1), unit: form.unit || 'times', frequency: form.frequency, scheduledDays: form.scheduledDays, weeklyTarget: Number(form.weeklyTarget || 3), estimatedMinutes: Number(form.estimate || 25), preferredTime: form.preferredTime || null, minimumTarget: Number(form.minimumTarget || 1), stretchTarget: Number(form.stretchTarget || form.target || 1), startDate: localDateKey(), ...(form.type === 'temporary' ? { endDate: form.endDate } : {}) } });
-      setForm({ title: '', description: '', type: 'routine', target: '', unit: 'times', category: 'OTHER', endDate: '', priority: 'MEDIUM', deadline: '', frequency: 'DAILY', scheduledDays: [], weeklyTarget: 3, estimate: 25, preferredTime: '', minimumTarget: 1, stretchTarget: '' }); setShowModal(false); await Promise.all([loadDashboard(), loadLibrary()]); if (nav === 'Insights') await loadInsights(); setNotice('Saved to MongoDB');
+      setForm({ title: '', description: '', type: 'routine', target: '', unit: 'times', category: 'OTHER', endDate: '', priority: 'MEDIUM', deadline: '', frequency: 'DAILY', scheduledDays: [], weeklyTarget: 3, estimate: 25, preferredTime: '', minimumTarget: 1, stretchTarget: '' }); setShowModal(false); await Promise.all([loadDashboard(), loadLibrary()]); if (nav === 'Overview') await loadInsights(); setNotice('Saved to MongoDB');
     } catch (error) { setNotice(error.message); }
   };
 
@@ -199,10 +200,9 @@ export default function App() {
   const restoreRoutine = async id => { try { await api(`/routines/${id}/restore`, { token, method: 'POST' }); await Promise.all([loadDashboard(), loadLibrary(), loadInsights()]); setNotice('Routine restored to your active rhythm'); } catch (error) { setNotice(error.message); } };
   const movePendingToToday = async id => { try { await api('/tasks/move-to-today', { token, method: 'PATCH', body: { ids: [id] } }); await Promise.all([loadDashboard(), loadLibrary()]); setNotice('Task moved to Today'); } catch (error) { setNotice(error.message); } };
   const saveMood = async values => { try { await api(`/moods/${localDateKey()}`, { token, method: 'PUT', body: values }); await loadMood(); setNotice('Mood check-in saved to MongoDB'); return true; } catch (error) { setNotice(error.message); return false; } };
-  const skipRoutine = async task => { try { await api(`/routines/${task.id}/skip`, { token, method: 'PATCH', body: { skipped: !task.skipped, reason: task.skipped ? '' : 'Intentional recovery day' } }); await Promise.all([loadDashboard(), loadInsights()]); setNotice(task.skipped ? 'Routine restored for today' : 'Recovery day saved without breaking consistency'); } catch (error) { setNotice(error.message); } };
   const refreshCalendar = async () => { await Promise.all([loadDashboard(), loadLibrary(), loadInsights()]); };
 
-  const finishAuthentication = ({ token: newToken, user: newUser }) => { localStorage.setItem('tracker-token', newToken); localStorage.setItem('tracker-user', JSON.stringify(newUser)); setAuthMessage(''); setUser(newUser); setToken(newToken); setNav('Overview'); };
+  const finishAuthentication = ({ token: newToken, user: newUser }) => { localStorage.setItem('tracker-token', newToken); localStorage.setItem('tracker-user', JSON.stringify(newUser)); setAuthMessage(''); setUser(newUser); setToken(newToken); setNav('Plan'); };
   if (!token) return <SiteFrame><AuthScreen onAuthenticated={finishAuthentication} initialError={authMessage} initialMode={authMessage ? 'login' : 'register'} /></SiteFrame>;
   const openComposer = () => { setFormError(''); setShowModal(true); };
   const signOut = () => {
@@ -214,43 +214,27 @@ export default function App() {
     window.location.reload();
   };
   const modal = showModal && <RoutineComposer form={form} setForm={setForm} error={formError} dark={dark} onSubmit={createTask} onClose={() => setShowModal(false)} />;
-  const overlays = page => <SiteFrame dark={dark}><Suspense fallback={<main className="page-loading" role="status">Opening {nav.toLowerCase()}…</main>}>{page}</Suspense><MobileDock active={nav} onNavigate={setNav}/><QuickCapture token={token} dark={dark} onChanged={refreshCalendar} notify={setNotice}/><ReminderCenter tasks={allSpecialTasks} dark={dark} notify={setNotice}/>{celebration && <Celebration key={celebration.id} celebration={celebration}/>} {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}{modal}</SiteFrame>;
-  if (nav === 'Overview') return overlays(<OverviewPage tasks={tasks} percent={percent} pendingCount={pendingCount} archivedCount={allRoutines.filter(routine => routine.status === 'ARCHIVED').length} moodData={moodData} dark={dark} onNavigate={setNav} onTheme={() => setDark(value => !value)} onSignOut={signOut} />);
-  if (nav === 'Plan') return overlays(<Suspense fallback={<main className="page-loading" role="status">Opening your planner…</main>}><ProductivityStudio token={token} dark={dark} onNavigate={setNav} onTheme={() => setDark(value => !value)} notify={setNotice} /></Suspense>);
-  if (nav === 'Insights') return overlays(<InsightsPage data={insights} loading={insightsLoading} error={insightsError} dark={dark} onBack={() => setNav('Today')} onTheme={() => setDark(value => !value)} onNavigate={setNav} />);
-  if (nav === 'Routines') return overlays(<RoutinesPage tasks={tasks} dark={dark} onNavigate={setNav} onAdd={openComposer} onArchive={archiveRoutine} />);
-  if (nav === 'Calendar') return overlays(<CalendarPage data={insights} tasks={allSpecialTasks} routines={allRoutines} token={token} loading={insightsLoading} error={insightsError} dark={dark} onNavigate={setNav} onChanged={refreshCalendar} notify={setNotice} />);
-  if (nav === 'Mood') return overlays(<MoodPage entry={moodEntry} data={moodData} loading={moodLoading} dark={dark} onNavigate={setNav} onSave={saveMood} />);
-  if (nav === 'Pending') return overlays(<ManagePage mode="Pending" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={setNav} onMove={movePendingToToday} />);
-  if (nav === 'Archive') return overlays(<ManagePage mode="Archive" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={setNav} onRestore={restoreRoutine} />);
+  const overlays = page => <WorkspaceShell active={nav} onNavigate={page => setNav(normalizePage(page))} dark={dark} onTheme={() => setDark(value => !value)} onSignOut={signOut} user={user}><SiteFrame dark={dark} showFooter={false}><Suspense fallback={<main className="page-loading" role="status">Opening {nav.toLowerCase()}…</main>}>{page}</Suspense>{nav !== 'Plan' && nav !== 'Today' && nav !== 'About' && <QuickCapture token={token} dark={dark} onChanged={refreshCalendar} notify={setNotice}/>}{nav !== 'About' && <ReminderCenter tasks={allSpecialTasks} dark={dark} notify={setNotice}/>}{celebration && <Celebration key={celebration.id} celebration={celebration}/>} {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}{modal}</SiteFrame></WorkspaceShell>;
+  if (nav === 'About') return overlays(<main className="workspace-page"><header className="workspace-heading"><div><h1>About TRACKER</h1></div></header><SiteFooter/></main>);
+  if (nav === 'Overview') return overlays(<OverviewDashboard tasks={tasks} percent={percent} pendingCount={pendingCount} insights={insights} loading={insightsLoading} error={insightsError} user={user} onNavigate={page => setNav(normalizePage(page))} onAdd={openComposer} onRetry={loadInsights}><Suspense fallback={<p role="status">Loading insights…</p>}><OverviewInsights data={insights} loading={insightsLoading} error={insightsError} dark={dark} onBack={() => setNav('Plan')} onRetry={loadInsights}/></Suspense></OverviewDashboard>);
+  if (nav === 'Plan' || nav === 'Today') return overlays(<PlanningPage dailyScores={insights?.daily || []} token={token} tasks={allSpecialTasks} routines={allRoutines} todayTasks={tasks} loading={loading} dark={dark} onChanged={refreshCalendar} notify={setNotice} onToggle={toggle} onIncrease={increase} onDecrease={decrease} onNavigate={page => setNav(normalizePage(page))}/>);
+  if (nav === 'Routines') return overlays(<RoutinesPage tasks={tasks} dark={dark} onNavigate={page => setNav(normalizePage(page))} onAdd={openComposer} onArchive={archiveRoutine} />);
+  if (nav === 'Mood') return overlays(<MoodPage entry={moodEntry} data={moodData} loading={moodLoading} dark={dark} onNavigate={page => setNav(normalizePage(page))} onSave={saveMood} />);
+  if (nav === 'Pending') return overlays(<ManagePage mode="Pending" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={page => setNav(normalizePage(page))} onMove={movePendingToToday} />);
+  if (nav === 'Archive') return overlays(<ManagePage mode="Archive" routines={allRoutines} tasks={allSpecialTasks} dark={dark} onNavigate={page => setNav(normalizePage(page))} onRestore={restoreRoutine} />);
 
-  return overlays(<main className={dark ? 'app today-app dark' : 'app today-app'}>
-    <section className="content today-content">
-      <WorkspaceLinks active="Today" onNavigate={setNav}/>
-      <header><div className="crumb"><span>Daily workspace</span><strong>/</strong><b>Today</b></div><div className="head-actions"><button className="mood-shortcut" onClick={() => setNav('Mood')}>How are you feeling?</button><button aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} className="round-button" onClick={() => setDark(value => !value)}><ThemeGlyph dark={dark}/></button></div></header>
-      <div className="hero"><div><p className="eyebrow">{formattedDate}</p><h1>Make today count<span>.</span></h1><p className="subtitle">Small promises, kept consistently, become your story.</p></div><div className="live-time"><span className="pulse" />{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<small>LIVE</small></div></div>
-      <section className="dashboard-grid">
-        <article className="score-card"><div className="card-heading"><span>DAILY SCORE</span><span className="live-source">LIVE DATA</span></div><div className="score-content"><Circle value={percent}/><div className="score-copy"><p>{scoredTasks.length ? 'Today’s progress is saved.' : 'Add your first routine to begin.'}</p><b>{completed} of {scoredTasks.length} complete</b><div className="mini-progress"><i style={{ width: `${percent}%` }}/></div><small>Intentional recovery days are excluded.</small></div></div></article>
-        <article className="focus-card"><div><p className="eyebrow">TODAY'S MOMENTUM</p><h2>{completed} / {scoredTasks.length}</h2><span>active items completed today</span></div><div className="focus-art"><i/><i/><i/><b>✦</b></div><button onClick={() => setNav('Insights')}>Open insights <span>→</span></button></article>
-      </section>
-      <section className="today-header"><div><p className="eyebrow">YOUR DAY {loading && '· SAVING'}</p><h2>Today’s rhythm</h2></div><button className="add-button" onClick={openComposer}><b>＋</b> Add intention</button></section>
-      <section className="task-layout"><TodayTasks tasks={tasks} loading={loading} onToggle={toggle} onIncrease={increase} onDecrease={decrease}/>
-        <aside className="right-rail"><article className="streak-card real-data-card"><div className="flame">◌</div><div><p className="eyebrow">HISTORY</p><h3>Real <span>data only</span></h3><p>Your streaks and trends appear after you complete routines on different days.</p></div><button className="insight-link" onClick={() => setNav('Insights')}>View progress →</button></article><article className="recovery-card"><p className="eyebrow">HUMANE CONSISTENCY</p><h3>Rest can be intentional.</h3><p>Use a recovery day when life interrupts a routine. It stays visible but does not lower your consistency score.</p>{tasks.filter(task => task.kind !== 'special' && !task.done).slice(0,3).map(task => <button key={task.id} onClick={() => skipRoutine(task)}>{task.skipped ? `Restore ${task.title}` : `Rest today · ${task.title}`}</button>)}</article></aside>
-      </section>
-    </section>
-  </main>);
+  return null;
+
 }
 
-function AndroidDownloadBanner() {
-  return <a className="android-download-banner" href={androidDownloadsUrl} target="_blank" rel="noreferrer"><AndroidLogo aria-hidden="true" size={19} weight="fill"/><strong>Get the Android app</strong><span>Flutter and native Kotlin editions</span><DownloadSimple aria-hidden="true" size={18} weight="bold"/></a>;
-}
+
 
 function SiteFooter() {
-  return <footer className="site-footer"><div className="site-footer-inner"><section className="site-footer-about" aria-labelledby="footer-about"><div className="site-footer-brand"><span className="brand-mark">✦</span><strong>TRACKER</strong></div><h2 id="footer-about">About and support</h2><p>TRACKER is a productivity workspace created by Aikansh Katiyar. Open-source contributions are welcome.</p><a className="footer-contribute" href={`${projectUrl}/issues`} target="_blank" rel="noreferrer"><GithubLogo aria-hidden="true" size={18} weight="bold"/>Contribute or request support</a></section><section className="site-footer-links" aria-labelledby="footer-connect"><h2 id="footer-connect">Developer</h2><a href="https://www.linkedin.com/in/aikansh-katiyar-975663305/" target="_blank" rel="noreferrer"><LinkedinLogo aria-hidden="true" size={18} weight="bold"/>LinkedIn</a><a href="mailto:aikanshkatiyar@gmail.com"><EnvelopeSimple aria-hidden="true" size={18} weight="bold"/>aikanshkatiyar@gmail.com</a><a href="https://github.com/Aikansh-Official" target="_blank" rel="noreferrer"><GithubLogo aria-hidden="true" size={18} weight="bold"/>GitHub</a></section><section className="site-footer-downloads" aria-labelledby="footer-downloads"><h2 id="footer-downloads">Android downloads</h2><p>Choose the edition that fits your device and workflow.</p><a href={flutterApkUrl}><AndroidLogo aria-hidden="true" size={18} weight="fill"/><span><strong>Flutter edition</strong><small>Cross-platform TRACKER app</small></span><DownloadSimple aria-hidden="true" size={18} weight="bold"/></a><a href={kotlinApkUrl}><AndroidLogo aria-hidden="true" size={18} weight="fill"/><span><strong>Kotlin edition</strong><small>Native Android TRACKER app</small></span><DownloadSimple aria-hidden="true" size={18} weight="bold"/></a></section></div><div className="site-footer-bottom"><span>© {new Date().getFullYear()} Aikansh Katiyar</span><a href={projectUrl} target="_blank" rel="noreferrer">View source on GitHub</a></div></footer>;
+  return <footer className="site-footer"><div className="site-footer-inner"><section className="site-footer-about" aria-labelledby="footer-about"><div className="site-footer-brand"><span className="brand-mark">✦</span><strong>TRACKER</strong></div><h2 id="footer-about">About and support</h2><p>TRACKER is a productivity workspace created by Aikansh Katiyar. Open-source contributions are welcome.</p><a className="footer-contribute" href={`${projectUrl}/issues`} target="_blank" rel="noreferrer"><GithubLogo aria-hidden="true" size={18} weight="bold"/>Contribute or request support</a></section><section className="site-footer-links" aria-labelledby="footer-connect"><h2 id="footer-connect">Developer</h2><a href="https://www.linkedin.com/in/aikansh-katiyar-975663305/" target="_blank" rel="noreferrer"><LinkedinLogo aria-hidden="true" size={18} weight="bold"/>LinkedIn</a><a href="mailto:aikanshkatiyar@gmail.com"><EnvelopeSimple aria-hidden="true" size={18} weight="bold"/>aikanshkatiyar@gmail.com</a><a href="https://github.com/Aikansh-Official" target="_blank" rel="noreferrer"><GithubLogo aria-hidden="true" size={18} weight="bold"/>GitHub</a></section><section className="site-footer-downloads" aria-labelledby="footer-downloads"><h2 id="footer-downloads">Android downloads</h2><p>Plan offline and sync with your website account.</p><a href={kotlinApkUrl}><AndroidLogo aria-hidden="true" size={18} weight="fill"/><span><strong>Download Android app</strong><small>Kotlin · version 2.1.0</small></span><DownloadSimple aria-hidden="true" size={18} weight="bold"/></a><a href={legacyAndroidUrl}>Older releases (legacy sync)</a></section></div><div className="site-footer-bottom"><span>© {new Date().getFullYear()} Aikansh Katiyar</span><a href={projectUrl} target="_blank" rel="noreferrer">View source on GitHub</a></div></footer>;
 }
 
-function SiteFrame({ children, dark = false }) {
-  return <div className={dark ? 'site-frame dark' : 'site-frame'}><AndroidDownloadBanner/>{children}<SiteFooter/></div>;
+function SiteFrame({ children, dark = false, showFooter = true }) {
+  return <div className={dark ? 'site-frame dark' : 'site-frame'}><AndroidDownloadBanner href={androidDownloadsUrl}/>{children}{showFooter && <SiteFooter/>}</div>;
 }
 
 function Celebration({ celebration }) {
@@ -273,16 +257,6 @@ function Celebration({ celebration }) {
   </div>;
 }
 
-
-function MobileDock({ active, onNavigate }) {
-  return <nav className="mobile-dock" aria-label="Mobile tracker pages">{workspaceNavigation.map(([item, NavigationIcon]) => <button key={item} className={active === item ? 'selected' : ''} aria-current={active === item ? 'page' : undefined} onClick={() => onNavigate(item)}><NavigationIcon aria-hidden="true" size={20} weight="bold"/><span>{item}</span></button>)}</nav>;
-}
-
-function OverviewPage({ tasks, percent, pendingCount, archivedCount, moodData, dark, onNavigate, onTheme, onSignOut }) {
-  const routines = tasks.filter(task => task.kind !== 'special'); const special = tasks.filter(task => task.kind === 'special');
-  const todayMood = moodData?.entries?.find(item => item.date === localDateKey());
-  return <main className={dark ? 'workspace-page dark' : 'workspace-page'}><WorkspaceLinks active="Overview" onNavigate={onNavigate}/><div className="page-utilities"><button aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} className="round-button" onClick={onTheme}><ThemeGlyph dark={dark}/></button><button className="quiet-button" onClick={onSignOut}>Sign out</button></div><header className="workspace-heading overview-hero"><div><p className="eyebrow">TRACKER OVERVIEW · LIVE FROM MONGODB</p><h1>Your day, without the noise<span>.</span></h1><p>Priorities, wellbeing, and progress in one honest workspace.</p></div><button className="add-button" onClick={() => onNavigate('Today')}>Open today →</button></header><section className="overview-metrics"><article><span>DAILY SCORE</span><strong>{percent}%</strong><small>{tasks.length} planned item{tasks.length === 1 ? '' : 's'} today</small></article><article><span>ROUTINES</span><strong>{routines.filter(task => task.done).length} / {routines.length}</strong><small>completed routine records</small></article><article><span>MOOD</span><strong>{todayMood ? `${todayMood.mood}/5` : '-'}</strong><small>{todayMood ? 'today’s saved check-in' : 'check in when you are ready'}</small></article><article><span>PENDING</span><strong>{pendingCount}</strong><small>tasks waiting to be rescheduled</small></article></section><section className="overview-actions"><button onClick={() => onNavigate('Today')}><b>Today</b><span>Check off, add, or update today’s intentions →</span></button><button onClick={() => onNavigate('Mood')}><b>Mood studio</b><span>Track energy, stress, focus, sleep, and emotions →</span></button><button onClick={() => onNavigate('Routines')}><b>Routines</b><span>Review the habits shaping your day →</span></button><button onClick={() => onNavigate('Calendar')}><b>Calendar</b><span>Inspect real completion scores by date →</span></button><button onClick={() => onNavigate('Insights')}><b>Insights</b><span>Explore consistency since day one →</span></button><button onClick={() => onNavigate('Pending')}><b>Pending</b><span>Reschedule work that slipped through the day →</span></button><button onClick={() => onNavigate('Archive')}><b>Archive</b><span>{archivedCount ? `${archivedCount} saved routine${archivedCount === 1 ? '' : 's'} · restore whenever you need →` : 'Keep retired routines without losing their history →'}</span></button></section></main>;
-}
 
 function RoutinesPage({ tasks, dark, onNavigate, onAdd, onArchive }) {
   const routines = tasks.filter(task => task.kind !== 'special');

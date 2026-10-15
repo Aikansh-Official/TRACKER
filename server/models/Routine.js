@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 const routineSchema = new mongoose.Schema({
+  clientId: { type: String, default: undefined },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   title: { type: String, trim: true, required: true, maxlength: 120 },
   description: { type: String, trim: true, default: '' },
@@ -22,5 +23,6 @@ const routineSchema = new mongoose.Schema({
   status: { type: String, enum: ['ACTIVE', 'PAUSED', 'EXPIRED', 'ARCHIVED'], default: 'ACTIVE', index: true }
 }, { timestamps: true });
 
+routineSchema.index({ userId: 1, clientId: 1 }, { unique: true, partialFilterExpression: { clientId: { $type: 'string' } } });
 routineSchema.index({ userId: 1, status: 1, startDate: 1 });
 export default mongoose.model('Routine', routineSchema);

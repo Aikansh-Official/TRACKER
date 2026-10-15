@@ -14,11 +14,17 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { title, description = '', type, targetQuantity, unit, category = 'OTHER', frequency = 'DAILY', scheduledDays = [], weeklyTarget = 3, estimatedMinutes = 25, preferredTime = null, minimumTarget = 1, stretchTarget, startDate, endDate } = req.body;
+    const clientId = req.body.clientId;
+    if (clientId && !/^[0-9a-f-]{36}$/i.test(clientId)) return res.status(400).json({ message: 'Invalid routine identifier.' });
+    if (clientId) {
+      const existing = await Routine.findOne({ userId: req.user.id, clientId });
+      if (existing) return res.status(201).json({ routine: existing });
+    }
     const isTemporary = type === 'TEMPORARY' || req.body.isTemporary === true;
     if (!title || !['BINARY', 'QUANTIFIABLE', 'TEMPORARY'].includes(type)) return res.status(400).json({ message: 'A routine title and valid type are required.' });
     if (isTemporary && !endDate) return res.status(400).json({ message: 'Temporary routines need an end date.' });
     const target = type === 'BINARY' ? 1 : Number(targetQuantity || 1);
-    const routine = await Routine.create({ userId: req.user.id, title, description, type, targetQuantity: target, unit: unit || (type === 'BINARY' ? 'times' : 'units'), category, frequency, scheduledDays: frequency === 'CUSTOM' ? [...new Set(scheduledDays.map(Number))].filter(day => day >= 0 && day <= 6) : [], weeklyTarget: Number(weeklyTarget || 3), estimatedMinutes: Number(estimatedMinutes || 25), preferredTime: preferredTime || null, minimumTarget: Math.min(Number(minimumTarget || 1), target), stretchTarget: Math.max(Number(stretchTarget || target), target), startDate: startDate || dateKey(), endDate: endDate || null, isTemporary });
+    const routine = await Routine.create({ ...(clientId ? { clientId } : {}), userId: req.user.id, title, description, type, targetQuantity: target, unit: unit || (type === 'BINARY' ? 'times' : 'units'), category, frequency, scheduledDays: frequency === 'CUSTOM' ? [...new Set(scheduledDays.map(Number))].filter(day => day >= 0 && day <= 6) : [], weeklyTarget: Number(weeklyTarget || 3), estimatedMinutes: Number(estimatedMinutes || 25), preferredTime: preferredTime || null, minimumTarget: Math.min(Number(minimumTarget || 1), target), stretchTarget: Math.max(Number(stretchTarget || target), target), startDate: startDate || dateKey(), endDate: endDate || null, isTemporary });
     res.status(201).json({ routine });
   } catch (error) { next(error); }
 });
