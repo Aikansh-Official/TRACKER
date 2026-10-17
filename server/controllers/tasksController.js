@@ -1,10 +1,9 @@
 import SpecialTask from '../models/SpecialTask.js';
-import { measurement, validDate } from '../services/taskValidation.js';
+import { measurement, normalizeRecurrence, validDate, validTime } from '../services/taskValidation.js';
+import { closedTaskStatuses, markCompleted, refreshTaskStatuses, reopenTask, scheduledStatus } from '../services/taskLifecycle.js';
 import { dateKey } from '../utils/date.js';
 
 
-const validTime = value => value === null || value === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
-const scheduledStatus = (scheduledDate, today) => scheduledDate < today ? 'PENDING' : scheduledDate > today ? 'SCHEDULED' : 'TODAY';
 const addDays = (date, amount) => { const value = new Date(`${date}T00:00:00.000Z`); value.setUTCDate(value.getUTCDate() + amount); return value.toISOString().slice(0, 10); };
 const addMonths = (date, amount) => {
   const value = new Date(`${date}T00:00:00.000Z`); const wantedDay = value.getUTCDate();
@@ -12,11 +11,7 @@ const addMonths = (date, amount) => {
   const lastDay = new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0)).getUTCDate();
   value.setUTCDate(Math.min(wantedDay, lastDay)); return value.toISOString().slice(0, 10);
 };
-const normalizeSubtasks = values => (Array.isArray(values) ? values : []).map(value => typeof value === 'string' ? { title: value } : value).map(value => ({ title: String(value.title || '').trim(), done: Boolean(value.done), completedAt: value.done ? value.completedAt || new Date() : null })).filter(value => value.title).slice(0, 30);
-const normalizeRecurrence = (value = {}) => {
-  const frequency = ['DAILY', 'WEEKLY', 'MONTHLY'].includes(value.frequency) ? value.frequency : 'NONE';
-  return { frequency, interval: Math.min(30, Math.max(1, Number(value.interval || 1))), weekdays: [...new Set(Array.isArray(value.weekdays) ? value.weekdays.map(Number).filter(day => day >= 0 && day <= 6) : [])], endDate: validDate(value.endDate) ? value.endDate : null };
-};
+const normalizeSubtasks = values => (Array.isArray(values) ? values : []).filter(Boolean).map(value => typeof value === 'string' ? { title: value } : value).map(value => ({ title: String(value.title || '').trim(), done: Boolean(value.done), completedAt: value.done ? value.completedAt || new Date() : null })).filter(value => value.title).slice(0, 30);
 const recurrenceDates = (start, recurrence) => {
   if (recurrence.frequency === 'NONE') return [start];
   const horizon = recurrence.endDate || addDays(start, 365); const result = [];
@@ -35,6 +30,7 @@ const recurrenceDates = (start, recurrence) => {
 
 export async function listTasks(req, res, next) {
   try {
+    await refreshTaskStatuses(req.user.id, dateKey());
     const filter = { userId: req.user.id, ...(req.query.includeDeleted === 'true' ? { deletedAt: { $exists: true } } : {}), ...(req.query.status ? { status: req.query.status } : {}) };
     if (req.query.from || req.query.to) filter.scheduledDate = { ...(req.query.from ? { $gte: req.query.from } : {}), ...(req.query.to ? { $lte: req.query.to } : {}) };
     res.json({ tasks: await SpecialTask.find(filter).sort({ scheduledDate: 1, allDay: -1, startTime: 1, createdAt: -1 }) });
@@ -50,10 +46,12 @@ export async function createTask(req, res, next) {
     if (!validTime(startTime) || !validTime(deadline)) return res.status(400).json({ message: 'Use a valid time.' });
     const isAllDay = Boolean(allDay); const recurrence = normalizeRecurrence(req.body.recurrence); const dates = recurrenceDates(scheduledDate, recurrence);
     if (!dates.length) return res.status(400).json({ message: 'Repeat end date must be on or after the scheduled date.' });
-    const shared = { ...measurement(req.body), userId: req.user.id, title, description, itemType: itemType === 'EVENT' ? 'EVENT' : 'TASK', originalDate: today, allDay: isAllDay, startTime: isAllDay ? null : startTime || null, priority, deadline: isAllDay ? null : deadline || null, estimatedMinutes: Number(estimatedMinutes || 30), preferredTime: preferredTime || null, reminderMinutes: reminderMinutes === null || reminderMinutes === '' ? null : Number(reminderMinutes), recurrence, subtasks: normalizeSubtasks(req.body.subtasks) };
-    const task = await SpecialTask.create({ ...shared, scheduledDate: dates[0], occurrenceDate: dates[0], status: shared.taskType === 'MEASURABLE' && shared.progress >= shared.target ? 'COMPLETED' : scheduledStatus(dates[0], today) });
+    const shared = { ...measurement(req.body), userId: req.user.id, title, description, itemType: itemType === 'EVENT' ? 'EVENT' : 'TASK', allDay: isAllDay, startTime: isAllDay ? null : startTime || null, priority, deadline: isAllDay ? null : deadline || null, estimatedMinutes: Number(estimatedMinutes || 30), preferredTime: preferredTime || null, reminderMinutes: reminderMinutes === null || reminderMinutes === '' ? null : Number(reminderMinutes), recurrence, subtasks: normalizeSubtasks(req.body.subtasks) };
+    const task = new SpecialTask({ ...shared, originalDate: dates[0], scheduledDate: dates[0], occurrenceDate: dates[0], status: scheduledStatus(dates[0], today) });
+    if (task.taskType === 'MEASURABLE' && task.progress >= task.target) markCompleted(task);
+    await task.save();
     task.seriesId = task._id; await task.save();
-    if (dates.length > 1) await SpecialTask.insertMany(dates.slice(1).map(date => ({ ...shared, seriesId: task._id, scheduledDate: date, occurrenceDate: date, progress: 0, status: scheduledStatus(date, today) })));
+    if (dates.length > 1) await SpecialTask.insertMany(dates.slice(1).map(date => ({ ...shared, seriesId: task._id, originalDate: date, scheduledDate: date, occurrenceDate: date, progress: 0, subtasks: shared.subtasks.map(item => ({ ...item, done: false, completedAt: null })), status: scheduledStatus(date, today) })));
     res.status(201).json({ task, occurrences: dates.length });
   } catch (error) { next(error); }
 }
@@ -66,7 +64,12 @@ export async function completeTask(req, res, next) {
   try {
     const task = await SpecialTask.findOne({ _id: req.params.id, userId: req.user.id });
     if (!task) return res.status(404).json({ message: 'Task not found.' });
-    const completed = req.body.completed !== false; if (task.taskType === 'MEASURABLE') task.progress = completed ? task.target : 0; task.status = completed ? 'COMPLETED' : scheduledStatus(task.scheduledDate, dateKey()); task.outcome = completed ? 'COMPLETED' : null; task.completedAt = completed ? new Date() : null; task.resolvedAt = completed ? new Date() : null; await task.save(); res.json({ task });
+    if (req.body.completed !== false) {
+      const previous = task.toObject();
+      if (task.taskType === 'MEASURABLE') task.progress = task.target;
+      markCompleted(task, previous);
+    } else reopenTask(task, dateKey(), { restoreProgress: task.status === 'COMPLETED' });
+    await task.save(); res.json({ task });
   } catch (error) { next(error); }
 }
 
@@ -84,8 +87,11 @@ export async function resolveTaskOutcome(req, res, next) {
     if (!['RESCHEDULED', 'SKIPPED', 'DROPPED', 'DELEGATED'].includes(outcome)) return res.status(400).json({ message: 'Choose rescheduled, skipped, dropped, or delegated.' });
     const today = dateKey(); const nextDate = req.body.scheduledDate || today;
     if (outcome === 'RESCHEDULED' && !validDate(nextDate)) return res.status(400).json({ message: 'Choose a valid reschedule date.' });
-    const changes = { outcome, outcomeNote: String(req.body.note || '').slice(0, 400), skipReason: outcome === 'SKIPPED' ? String(req.body.reason || req.body.note || 'Intentional rest').slice(0, 180) : '', delegatedTo: outcome === 'DELEGATED' ? String(req.body.delegatedTo || '').slice(0, 120) : '', resolvedAt: new Date(), status: outcome === 'RESCHEDULED' ? scheduledStatus(nextDate, today) : outcome, ...(outcome === 'RESCHEDULED' ? { scheduledDate: nextDate } : {}) };
-    const task = await SpecialTask.findOneAndUpdate({ _id: req.params.id, userId: req.user.id }, changes, { returnDocument: 'after', runValidators: true }); if (!task) return res.status(404).json({ message: 'Task not found.' }); res.json({ task });
+    const task = await SpecialTask.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!task) return res.status(404).json({ message: 'Task not found.' });
+    if (task.status === 'COMPLETED') reopenTask(task, today, { restoreProgress: true });
+    Object.assign(task, { outcome, outcomeNote: String(req.body.note || '').slice(0, 400), skipReason: outcome === 'SKIPPED' ? String(req.body.reason || req.body.note || 'Intentional rest').slice(0, 180) : '', delegatedTo: outcome === 'DELEGATED' ? String(req.body.delegatedTo || '').slice(0, 120) : '', completedAt: null, resolvedAt: new Date(), status: outcome === 'RESCHEDULED' ? scheduledStatus(nextDate, today) : outcome, ...(outcome === 'RESCHEDULED' ? { scheduledDate: nextDate } : {}) });
+    await task.save(); res.json({ task });
   } catch (error) { next(error); }
 }
 
@@ -94,12 +100,21 @@ export async function updateTask(req, res, next) {
     const task = await SpecialTask.findOne({ _id: req.params.id, userId: req.user.id }); if (!task) return res.status(404).json({ message: 'Task not found.' });
     const allowed = ['title', 'description', 'itemType', 'priority', 'deadline', 'scheduledDate', 'allDay', 'startTime', 'estimatedMinutes', 'preferredTime', 'reminderMinutes'];
     const changes = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
-    if (changes.scheduledDate && !validDate(changes.scheduledDate)) return res.status(400).json({ message: 'Choose a valid date.' });
+    if ('scheduledDate' in changes && !validDate(changes.scheduledDate)) return res.status(400).json({ message: 'Choose a valid date.' });
     if ('startTime' in changes && !validTime(changes.startTime)) return res.status(400).json({ message: 'Use a valid start time.' });
     if ('deadline' in changes && !validTime(changes.deadline)) return res.status(400).json({ message: 'Use a valid deadline.' });
+    const previous = task.toObject();
     Object.assign(task, changes, measurement(req.body, task));
-    if (task.taskType === 'MEASURABLE') { task.status = task.progress >= task.target ? 'COMPLETED' : scheduledStatus(task.scheduledDate, dateKey()); task.completedAt = task.status === 'COMPLETED' ? new Date() : null; }  if ('subtasks' in req.body) task.subtasks = normalizeSubtasks(req.body.subtasks); task.itemType = task.itemType === 'EVENT' ? 'EVENT' : 'TASK'; if (task.allDay) { task.startTime = null; task.deadline = null; }
-    if (!['COMPLETED', 'SKIPPED', 'DROPPED', 'DELEGATED', 'ARCHIVED'].includes(task.status)) task.status = scheduledStatus(task.scheduledDate, dateKey()); await task.save(); res.json({ task });
+    if (!closedTaskStatuses.has(task.status)) {
+      if (task.taskType === 'MEASURABLE' && task.progress >= task.target) markCompleted(task, previous);
+      else if (task.taskType === 'MEASURABLE' && previous.status === 'COMPLETED') reopenTask(task, dateKey());
+      else if (task.status === 'COMPLETED') markCompleted(task, previous);
+      else task.status = scheduledStatus(task.scheduledDate, dateKey());
+    }
+    if ('subtasks' in req.body) task.subtasks = normalizeSubtasks(req.body.subtasks);
+    task.itemType = task.itemType === 'EVENT' ? 'EVENT' : 'TASK';
+    if (task.allDay) { task.startTime = null; task.deadline = null; }
+    await task.save(); res.json({ task });
   } catch (error) { next(error); }
 }
 

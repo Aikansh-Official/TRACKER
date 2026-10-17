@@ -9,6 +9,7 @@ const specialTaskSchema = new mongoose.Schema({
   taskType: { type: String, enum: ['ONE_TIME', 'MEASURABLE'], default: 'ONE_TIME' },
   target: { type: Number, min: 1, max: 1000000, default: 1 },
   progress: { type: Number, min: 0, default: 0 },
+  progressBeforeCompletion: { type: Number, min: 0, default: null },
   unit: { type: String, maxlength: 40, default: 'times' },
   lastMutationId: { type: String, default: null },
   originalDate: { type: String, required: true },

@@ -3,6 +3,21 @@ export function validDate(value) {
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 
+export const validTime = value => value === null || value === '' || (typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value));
+
+export function normalizeRecurrence(value = {}) {
+  const frequency = value?.frequency || 'NONE';
+  const interval = Number(value?.interval ?? 1);
+  const weekdays = value?.weekdays ?? [];
+  const endDate = value?.endDate || null;
+  if (!['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(frequency) || !Number.isInteger(interval) || interval < 1 || interval > 30
+      || !Array.isArray(weekdays) || weekdays.some(day => !Number.isInteger(Number(day)) || Number(day) < 0 || Number(day) > 6)
+      || (endDate && !validDate(endDate))) {
+    throw Object.assign(new Error('Choose a valid repeat interval, weekdays, and end date.'), { status: 400 });
+  }
+  return { frequency, interval, weekdays: [...new Set(weekdays.map(Number))], endDate };
+}
+
 export function measurement(input, current = {}) {
   const taskType = input.taskType ?? current.taskType ?? 'ONE_TIME';
   const target = Number(input.target ?? current.target ?? 1);

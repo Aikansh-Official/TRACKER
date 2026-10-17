@@ -2,6 +2,7 @@ import Routine from '../models/Routine.js';
 import DailyRoutineRecord from '../models/DailyRoutineRecord.js';
 import SpecialTask from '../models/SpecialTask.js';
 import { dateKey } from '../utils/date.js';
+import { refreshTaskStatuses } from './taskLifecycle.js';
 
 const addDays = (date, amount) => { const value = new Date(`${date}T00:00:00.000Z`); value.setUTCDate(value.getUTCDate() + amount); return value.toISOString().slice(0, 10); };
 const startOfWeek = date => { const value = new Date(`${date}T00:00:00.000Z`); const weekday = value.getUTCDay(); return addDays(date, -(weekday === 0 ? 6 : weekday - 1)); };
@@ -9,8 +10,7 @@ const startOfWeek = date => { const value = new Date(`${date}T00:00:00.000Z`); c
 export async function prepareDailyState(user) {
   const today = dateKey(new Date(), user.timezone);
   // A missed browser session cannot lose tasks: this runs on every protected dashboard request.
-  await SpecialTask.updateMany({ userId: user._id, status: { $in: ['TODAY', 'SCHEDULED'] }, scheduledDate: { $lt: today } }, { $set: { status: 'PENDING' } });
-  await SpecialTask.updateMany({ userId: user._id, status: 'SCHEDULED', scheduledDate: today }, { $set: { status: 'TODAY' } });
+  await refreshTaskStatuses(user._id, today);
   await Routine.updateMany({ userId: user._id, status: 'ACTIVE', isTemporary: true, endDate: { $lt: today } }, { $set: { status: 'EXPIRED' } });
   const candidates = await Routine.find({ userId: user._id, status: 'ACTIVE', startDate: { $lte: today }, $and: [{ $or: [{ pausedUntil: null }, { pausedUntil: { $lt: today } }] }, { $or: [{ isTemporary: false }, { endDate: { $gte: today } }] }] }).sort({ createdAt: 1 });
   const weekStart = startOfWeek(today);
@@ -22,7 +22,7 @@ export async function prepareDailyState(user) {
     if (routine.frequency === 'WEEKDAYS') return weekday >= 1 && weekday <= 5;
     if (routine.frequency === 'WEEKENDS') return weekday === 0 || weekday === 6;
     if (routine.frequency === 'CUSTOM') return routine.scheduledDays.includes(weekday);
-    if (routine.frequency === 'WEEKLY_TARGET') return (weeklyCompletions.get(String(routine._id)) || 0) < routine.weeklyTarget;
+    if (routine.frequency === 'WEEKLY_TARGET') return (weeklyCompletions.get(String(routine._id)) || 0) < routine.weeklyTarget || weeklyRecords.some(record => String(record.routineId) === String(routine._id) && record.date === today);
     return true;
   });
   await Promise.all(routines.map(routine => DailyRoutineRecord.updateOne(

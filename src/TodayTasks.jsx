@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-export default function TodayTasks({ tasks, loading, onToggle, onIncrease, onDecrease }) {
+export default function TodayTasks({ tasks, loading, onToggle, onIncrease, onDecrease, onSkip }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [busy, setBusy] = useState([]);
@@ -31,6 +31,7 @@ export default function TodayTasks({ tasks, loading, onToggle, onIncrease, onDec
       <button className={`check ${task.done ? 'checked' : ''}`} disabled={busy.includes(task.id) || task.skipped} onClick={() => update(task.id, onToggle)} aria-label={`Mark ${task.title} ${task.done ? 'not done' : 'done'}`}>{task.done && '✓'}</button>
       <div className={`task-icon ${task.color}`} aria-hidden="true">{task.icon}</div>
       <div className="task-info"><h3>{task.title}{task.kind === 'temporary' && <span className="tag">TEMPORARY</span>}</h3><p>{busy.includes(task.id) ? 'Saving…' : task.note}</p>{task.kind === 'quantity' && <div className="quantity-progress" role="progressbar" aria-label={`${task.title} progress`} aria-valuemin={0} aria-valuemax={task.target} aria-valuenow={task.value}><i style={{ width: `${Math.min(100, task.value / task.target * 100)}%` }}/><span>{task.value}/{task.target}</span></div>}</div>
+      {onSkip && <button className="routine-rest-button" disabled={busy.includes(task.id)} onClick={() => update(task.id, () => onSkip(task))}>{task.skipped ? 'Resume today' : 'Rest today'}</button>}
       {task.kind === 'quantity' && !task.skipped && <div className="count-controls"><button className="count-button subtract" aria-label={`Decrease ${task.title}`} disabled={busy.includes(task.id) || task.value <= 0} onClick={() => update(task.id, onDecrease)}>− 1</button><button className="count-button" aria-label={`Increase ${task.title}`} disabled={busy.includes(task.id) || task.value >= task.target} onClick={() => update(task.id, onIncrease)}>+ 1</button></div>}
     </article>)}
   </div>;

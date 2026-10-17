@@ -5,7 +5,7 @@
 
 A personal workspace for the work you want to finish—and the habits you want to keep.
 
-[Open TRACKER](https://tracker-rw9d.onrender.com/) · [Get the Android app](https://github.com/Aikansh-Official/TRACKER/releases/tag/android-v2.1.0) · [Report an issue](https://github.com/Aikansh-Official/TRACKER/issues)
+[Open TRACKER](https://tracker-rw9d.onrender.com/) · [Get the Android app](https://github.com/Aikansh-Official/TRACKER/releases/tag/android-v2.1.1) · [Report an issue](https://github.com/Aikansh-Official/TRACKER/issues)
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Express](https://img.shields.io/badge/API-Express-353535?logo=express)
@@ -33,9 +33,9 @@ Inside Plan, expand **Focus, goals, and reflection** for focus sessions, milesto
 
 ## Your phone works offline
 
-The [native Android companion](https://github.com/Aikansh-Official/TRACKER-Kotlin-) saves edits to SQLite first. When you reconnect with the same account, it synchronizes with the website's API. Pending edits survive restarts; conflicting task edits ask you which version to keep.
+The [native Android companion](https://github.com/Aikansh-Official/TRACKER-Kotlin-) saves edits to SQLite first. Use Sync now or select a daily time to exchange updates with the website using the same account. Explicit sign-in imports the account once; edits and reopening the app do not start sync. Pending edits survive restarts; conflicting task edits ask you which version to keep.
 
-[Download Android 2.1.0](https://github.com/Aikansh-Official/TRACKER/releases/download/android-v2.1.0/TRACKER-Kotlin-release.apk) · [Checksums and installation](downloads/android/README.md)
+[Download Android 2.1.1](https://github.com/Aikansh-Official/TRACKER/releases/download/android-v2.1.1/TRACKER-Kotlin-release.apk) · [Checksums and installation](downloads/android/README.md)
 
 The APK is a directly distributed portfolio build signed with the existing Android debug key, not a Google Play release. Android 8.0 or later is required. Older Flutter/Kotlin builds use a legacy sync protocol; upgrade to the current native app before syncing with this backend.
 
@@ -72,7 +72,7 @@ flowchart LR
 
 - **Web:** React + Vite; shared navigation, Overview analytics, and a unified Plan page.
 - **API:** Express + Mongoose; user-scoped data, task validation, soft deletion, and revision-aware sync.
-- **Android:** Kotlin + Jetpack Compose + SQLite; local edits, durable pending changes, and foreground sync.
+- **Android:** Kotlin + Jetpack Compose + SQLite; local edits, durable pending changes, manual sync, and optional scheduled daily sync.
 - **Optional AI:** server-side, opt-in suggestions grounded in a small set of the signed-in user's recent records. Disabled by default; requires `AI_ENABLED`, `AI_MODEL`, and `OPENAI_API_KEY`. No key is bundled in the clients.
 
 ```text
@@ -99,7 +99,7 @@ Render serves the frontend and API from the same URL. Connect this repository's 
 
 ## Honest boundaries
 
-Web access needs the server; offline editing is implemented in the Android app. Android sync runs while the app is in the foreground or when requested, not as an always-running background service. Task conflicts use revisions; competing routine/mood edits for the same date use last-successful-upload-wins. Live AI generation requires provider configuration and has not been validated in this release's local checks.
+Web access needs the server; offline editing is implemented in the Android app. Android defaults to manual sync and offers an optional daily time. Scheduled work waits for connectivity; Android battery restrictions and Render free-service cold starts can delay completion. Task conflicts use revisions; competing routine/mood edits for the same date use last-successful-upload-wins. Live AI generation requires provider configuration and has not been validated in this release's local checks.
 
 ## Built by Aikansh Katiyar
 

@@ -1,9 +1,11 @@
 import test from 'node:test';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as wait } from 'node:timers/promises';
+import { dateKey } from '../server/utils/date.js';
 
 test('local MongoDB: authentication, task persistence, isolation, sync conflicts, retry and deletion', { timeout: 90000 }, async t => {
   const port = 5058;
@@ -54,10 +56,135 @@ test('local MongoDB: authentication, task persistence, isolation, sync conflicts
   assert.equal(task.status, 'COMPLETED'); assert.ok(task.revision > before);
   assert.equal((await call('/tasks?from=2026-10-16&to=2026-10-16', { token })).tasks[0].progress, 5);
   task = (await call(`/tasks/${task._id}/complete`, { token, method: 'PATCH', body: { completed: false } })).task;
-  assert.equal(task.progress, 0);
+  assert.equal(task.progress, 2);
+  assert.equal(task.outcome, null);
+  assert.equal(task.completedAt, null);
+  await t.test('pending tasks complete in place and preserve their original planned date', async () => {
+    let pending = (await call('/tasks', { token, method: 'POST', body: { title: 'Already finished yesterday', scheduledDate: '2001-01-03' }, status: 201 })).task;
+    assert.equal(pending.status, 'PENDING');
+    assert.equal(pending.originalDate, '2001-01-03');
+    pending = (await call(`/tasks/${pending._id}/complete`, { token, method: 'PATCH', body: { completed: true } })).task;
+    assert.equal(pending.status, 'COMPLETED');
+    assert.equal(pending.scheduledDate, '2001-01-03');
+    assert.equal(pending.outcome, 'COMPLETED');
+    assert.ok(pending.completedAt);
+    assert.equal(pending.resolvedAt, pending.completedAt);
+    const completedAt = pending.completedAt;
+    pending = (await call(`/tasks/${pending._id}/complete`, { token, method: 'PATCH', body: { completed: true } })).task;
+    assert.equal(pending.completedAt, completedAt, 'Repeated completion must not rewrite history');
+    pending = (await call(`/tasks/${pending._id}/complete`, { token, method: 'PATCH', body: { completed: false } })).task;
+    assert.equal(pending.status, 'PENDING');
+    assert.equal(pending.scheduledDate, '2001-01-03');
+  });
+  await t.test('measurable completion and undo keep progress and completion history consistent', async () => {
+    let measured = (await call('/tasks', { token, method: 'POST', body: { title: 'Read pages', scheduledDate: '2001-01-03', taskType: 'MEASURABLE', target: 10, progress: 3, unit: 'pages' }, status: 201 })).task;
+    measured = (await call(`/tasks/${measured._id}`, { token, method: 'PATCH', body: { progress: 10 } })).task;
+    assert.equal(measured.outcome, 'COMPLETED');
+    assert.equal(measured.resolvedAt, measured.completedAt);
+    const completedAt = measured.completedAt;
+    measured = (await call(`/tasks/${measured._id}`, { token, method: 'PATCH', body: { title: 'Read chapter pages' } })).task;
+    assert.equal(measured.completedAt, completedAt, 'Title edits must not move completion to today');
+    measured = (await call(`/tasks/${measured._id}/complete`, { token, method: 'PATCH', body: { completed: false } })).task;
+    assert.equal(measured.progress, 3, 'Undo restores progress before marking the whole task done');
+    assert.equal(measured.outcome, null);
+    assert.equal(measured.resolvedAt, null);
+    measured = (await call(`/tasks/${measured._id}`, { token, method: 'PATCH', body: { progress: 10 } })).task;
+    measured = (await call(`/tasks/${measured._id}`, { token, method: 'PATCH', body: { progress: 9 } })).task;
+    assert.equal(measured.status, 'PENDING');
+    assert.equal(measured.completedAt, null);
+    assert.equal(measured.outcome, null);
+    const alreadyDone = (await call('/tasks', { token, method: 'POST', body: { title: 'Imported finished reading', taskType: 'MEASURABLE', target: 2, progress: 2 }, status: 201 })).task;
+    assert.ok(alreadyDone.completedAt);
+    assert.equal(alreadyDone.outcome, 'COMPLETED');
+  });
+  await t.test('editing closed tasks does not resurrect them and rescheduling reopens cleanly', async () => {
+    let closed = (await call('/tasks', { token, method: 'POST', body: { title: 'Optional practice', scheduledDate: '2001-01-03', taskType: 'MEASURABLE', target: 5, progress: 2 }, status: 201 })).task;
+    closed = (await call(`/tasks/${closed._id}/outcome`, { token, method: 'PATCH', body: { outcome: 'SKIPPED', reason: 'Taking a break' } })).task;
+    closed = (await call(`/tasks/${closed._id}`, { token, method: 'PATCH', body: { title: 'Optional questions' } })).task;
+    assert.equal(closed.status, 'SKIPPED');
+    assert.equal(closed.outcome, 'SKIPPED');
+    closed = (await call(`/tasks/${closed._id}/complete`, { token, method: 'PATCH', body: { completed: true } })).task;
+    assert.equal(closed.skipReason, '');
+    closed = (await call(`/tasks/${closed._id}/outcome`, { token, method: 'PATCH', body: { outcome: 'RESCHEDULED', scheduledDate: '2099-01-01' } })).task;
+    assert.equal(closed.status, 'SCHEDULED');
+    assert.equal(closed.progress, 2);
+    assert.equal(closed.originalDate, '2001-01-03');
+    assert.equal(closed.completedAt, null);
+    assert.equal(closed.outcome, 'RESCHEDULED');
+    await call(`/tasks/${closed._id}`, { token, method: 'PATCH', body: { scheduledDate: '' }, status: 400 });
+  });
+  await t.test('repeated occurrences begin with separate dates and unchecked checklists', async () => {
+    const recurrence = await call('/tasks', { token, method: 'POST', body: { title: 'Repeat with checklist', scheduledDate: '2001-01-03', recurrence: { frequency: 'DAILY', endDate: '2001-01-05' }, subtasks: [{ title: 'Prepare', done: true }] }, status: 201 });
+    const occurrences = (await call('/tasks', { token })).tasks.filter(value => value.seriesId === recurrence.task.seriesId);
+    assert.equal(occurrences.length, 3);
+    for (const occurrence of occurrences) {
+      assert.equal(occurrence.originalDate, occurrence.scheduledDate);
+      assert.equal(occurrence.subtasks[0].done, occurrence._id === recurrence.task._id);
+      if (occurrence._id !== recurrence.task._id) assert.equal(occurrence.subtasks[0].completedAt, null);
+    }
+    await call('/tasks', { token, method: 'POST', body: { title: 'Invalid repeating date', recurrence: { frequency: 'DAILY', endDate: '2026-02-30' } }, status: 400 });
+    await call('/tasks', { token, method: 'POST', body: { title: 'Invalid interval', recurrence: { frequency: 'DAILY', interval: 1.5 } }, status: 400 });
+  });
+  await t.test('task lists roll overdue tasks forward without needing a dashboard visit', async () => {
+    const overdue = (await call('/tasks', { token, method: 'POST', body: { title: 'Previous day rollover', scheduledDate: '2001-01-03' }, status: 201 })).task;
+    const database = await mongoose.createConnection('mongodb://127.0.0.1:27017/tracker_simplification_test').asPromise();
+    try {
+      await database.collection('specialtasks').updateOne({ _id: new mongoose.Types.ObjectId(overdue._id) }, { $set: { status: 'TODAY' } });
+      const pending = (await call('/tasks?status=PENDING', { token })).tasks;
+      assert.ok(pending.some(value => value._id === overdue._id));
+    } finally { await database.close(); }
+  });
+  await t.test('temporary routines can be completed and routine dates are validated', async () => {
+    const routine = (await call('/routines', { token, method: 'POST', body: { title: 'Temporary check-in', type: 'TEMPORARY', startDate: '2001-01-03', endDate: '2099-01-01' }, status: 201 })).routine;
+    let result = await call(`/routines/${routine._id}/progress`, { token, method: 'PATCH', body: { date: '2001-01-03', completed: true } });
+    assert.equal(result.record.completed, true);
+    assert.equal(result.record.completedQuantity, 1);
+    result = await call(`/routines/${routine._id}/progress`, { token, method: 'PATCH', body: { date: '2001-01-03', completed: false } });
+    assert.equal(result.record.completed, false);
+    await call(`/routines/${routine._id}/progress`, { token, method: 'PATCH', body: { date: '2026-02-30', completed: true }, status: 400 });
+    await call(`/routines/${routine._id}/skip`, { token, method: 'PATCH', body: { date: '2000-01-01' }, status: 400 });
+    await call(`/routines/${routine._id}/progress`, { token: b.token, method: 'PATCH', body: { completed: true }, status: 404 });
+    await call(`/routines/${routine._id}`, { token, method: 'PATCH', body: { endDate: '2000-01-01' }, status: 400 });
+    await call('/routines', { token, method: 'POST', body: { title: 'Invalid schedule', type: 'TEMPORARY', startDate: '2026-03-01', endDate: '2026-02-28' }, status: 400 });
+    await call('/routines', { token, method: 'POST', body: { title: 'Missing weekdays', type: 'BINARY', frequency: 'CUSTOM', scheduledDays: [] }, status: 400 });
+  });
+  await t.test('reaching a weekly routine goal keeps today’s completion visible', async () => {
+    const today = dateKey();
+    const routine = (await call('/routines', { token, method: 'POST', body: { title: 'One weekly workout', type: 'BINARY', frequency: 'WEEKLY_TARGET', weeklyTarget: 1, startDate: today }, status: 201 })).routine;
+    const before = await call('/dashboard', { token });
+    assert.ok(before.records.some(record => record.routineId._id === routine._id));
+    await call(`/routines/${routine._id}/progress`, { token, method: 'PATCH', body: { date: today, completed: true } });
+    const after = await call('/dashboard', { token });
+    const completion = after.records.find(record => record.routineId._id === routine._id);
+    assert.ok(completion, 'A completed weekly goal should not disappear from the day');
+    assert.equal(completion.completed, true);
+  });
   const syncId = randomUUID();
   const mutation = { entityType: 'task', operation: 'upsert', syncId, baseRevision: 0, mutationId: randomUUID(), payload: { task: { title: 'Offline task', originalDate: '2026-10-15', scheduledDate: '2026-10-15', taskType: 'MEASURABLE', target: 5, progress: 2, unit: 'questions' } } };
   const push = changes => call('/sync/push', { token, method: 'POST', body: { mutations: changes } });
+  await t.test('phone snapshots use the same completion, closed-state, and all-day rules', async () => {
+    const id = randomUUID();
+    const payload = { title: 'Phone reading', scheduledDate: '2001-01-03', taskType: 'MEASURABLE', target: 5, progress: 5, allDay: true, startTime: '09:00', deadline: '10:00', completedAt: '2026-10-01T10:00:00.000Z' };
+    const change = { entityType: 'task', operation: 'upsert', syncId: id, baseRevision: 0, mutationId: randomUUID(), payload: { task: payload } };
+    assert.equal((await push([change])).accepted.length, 1);
+    let synced = (await call('/tasks', { token })).tasks.find(value => value.syncId === id);
+    assert.equal(synced.status, 'COMPLETED');
+    assert.equal(synced.outcome, 'COMPLETED');
+    assert.ok(synced.completedAt);
+    assert.equal(synced.completedAt, payload.completedAt, 'Offline completions retain the device completion time when uploaded later');
+    assert.equal(synced.resolvedAt, synced.completedAt);
+    assert.equal(synced.startTime, null);
+    assert.equal(synced.deadline, null);
+    assert.equal(synced.originalDate, '2001-01-03');
+    const completedAt = synced.completedAt;
+    assert.equal((await push([{ ...change, baseRevision: synced.revision, mutationId: randomUUID(), payload: { task: { ...payload, title: 'Edited phone reading' } } }])).accepted.length, 1);
+    synced = (await call('/tasks', { token })).tasks.find(value => value.syncId === id);
+    assert.equal(synced.completedAt, completedAt);
+    assert.equal((await push([{ ...change, baseRevision: synced.revision, mutationId: randomUUID(), payload: { task: { ...payload, status: 'SKIPPED', outcome: 'SKIPPED', progress: 2 } } }])).accepted.length, 1);
+    synced = (await call('/tasks', { token })).tasks.find(value => value.syncId === id);
+    assert.equal(synced.status, 'SKIPPED');
+    assert.equal(synced.completedAt, null);
+  });
   assert.equal((await push([mutation])).accepted.length, 1);
   assert.equal((await push([mutation])).accepted.length, 1);
   let records = (await call('/tasks', { token })).tasks;

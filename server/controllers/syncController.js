@@ -1,5 +1,6 @@
 import SpecialTask from '../models/SpecialTask.js';
-import { measurement, validDate } from '../services/taskValidation.js';
+import { measurement, normalizeRecurrence, validDate, validTime } from '../services/taskValidation.js';
+import { closedTaskStatuses, markCompleted, reopenTask, scheduledStatus } from '../services/taskLifecycle.js';
 import { dateKey } from '../utils/date.js';
 
 
@@ -30,6 +31,7 @@ const taskPatch = task => ({
   outcome: taskValue(task, 'outcome'),
   outcomeNote: String(taskValue(task, 'outcomeNote', '')),
   delegatedTo: String(taskValue(task, 'delegatedTo', '')),
+  skipReason: String(taskValue(task, 'skipReason', '')),
   completedAt: taskValue(task, 'completedAt'),
   resolvedAt: taskValue(task, 'resolvedAt'),
   deletedAt: taskValue(task, 'deletedAt')
@@ -55,11 +57,22 @@ export async function pushChanges(req, res, next) {
         conflicts.push({ syncId, serverRevision: existing?.revision || 0, task: existing }); continue;
       }
       const normalized = taskPatch(payload);
-      const patch = Object.fromEntries(Object.entries(normalized).filter(([key]) => key in payload || ['taskType','target','progress','unit'].includes(key)));
+      const patch = Object.fromEntries(Object.entries(normalized).filter(([key]) => key in payload || key.replace(/[A-Z]/g, value => `_${value.toLowerCase()}`) in payload || ['taskType','target','progress','unit'].includes(key)));
       if (!patch.title || !validDate(patch.scheduledDate)) return res.status(400).json({ message: 'A title and real calendar date are required.' });
-      if (patch.taskType === 'MEASURABLE') patch.status = patch.progress >= patch.target ? 'COMPLETED' : patch.scheduledDate < dateKey() ? 'PENDING' : patch.scheduledDate > dateKey() ? 'SCHEDULED' : 'TODAY';
       const stamp = new Date();
       const candidate = new SpecialTask({ ...(existing?.toObject() || {}), ...patch, userId: req.user.id, syncId, revision: baseRevision + 1, syncUpdatedAt: stamp, lastMutationId: mutationId });
+      if (!validDate(candidate.originalDate)) candidate.originalDate = candidate.scheduledDate;
+      if (candidate.allDay) { candidate.startTime = null; candidate.deadline = null; }
+      if (!validTime(candidate.startTime) || !validTime(candidate.deadline)) return res.status(400).json({ message: 'Use a valid time.' });
+      candidate.recurrence = normalizeRecurrence(candidate.recurrence);
+      // Keep explicit skipped/delegated decisions; progress alone must not
+      // resurrect them when another device sends its snapshot.
+      if (closedTaskStatuses.has(candidate.status)) candidate.completedAt = null;
+      else if (candidate.taskType === 'MEASURABLE' && candidate.progress >= candidate.target) markCompleted(candidate, existing?.toObject(), candidate.completedAt || stamp);
+      else if (candidate.taskType !== 'MEASURABLE' && candidate.status === 'COMPLETED') markCompleted(candidate, existing?.toObject(), candidate.completedAt || stamp);
+      else if (existing?.status === 'COMPLETED' || candidate.outcome === 'COMPLETED') reopenTask(candidate, dateKey());
+      else candidate.status = scheduledStatus(candidate.scheduledDate, dateKey());
+      for (const key of ['originalDate', 'startTime', 'deadline', 'status', 'outcome', 'completedAt', 'resolvedAt', 'progressBeforeCompletion', 'skipReason', 'delegatedTo']) patch[key] = candidate[key];
       await candidate.validate();
       if (existing) {
         // Compare and swap: a simultaneous website write cannot slip between checking and saving.
